@@ -103,14 +103,13 @@ Heatmap(as.matrix(mpa_table_markers),
 
 ```
 
-# Heatmap: Relative abundance of top 30 species
+# Heatmap: Relative abundance of top 10 species
 ```{r}
-top30_mpa_table <- mpa_table %>%
-  arrange(desc(rowMeans(.[,-1]))) %>% 
+top30_mpa_table <- mpa_table %>% 
   select(species, noquote(metadata %>% arrange(study_condition) %>% select(sampleID)) %>% t %>% as.character) %>% 
   mutate_if(is.numeric, funs(log10(1+.))) %>% 
   mutate(species = gsub('_',' ', species)) %>% 
-  top_n(10) %>% 
+  top_n(10, wt = rowMeans(.[,-1])) %>% 
   column_to_rownames('species')
 
 
@@ -155,6 +154,11 @@ done
 
 for dataset in FengQ_2015 GuptaA_2019 ThomasAM_2019_a ThomasAM_2019_b ThomasAM_2019_c VogtmannE_2016 WirbelJ_2018 YachidaS_2019 YuJ_2015 ZellerG_2014
 do
+  find /shares/CIBIO-Storage/CM/scratch/data/meta/${dataset}/humann-3.0_v30_CHOCOPhlAn_201901 -name *_genefamilies.tsv | xargs -I {} -P 100 bash -c 'x={}; humann_regroup_table --input ${x} --output ${x/genefamilies/genefamilies-grouped} --group uniref90_rxn'
+done
+
+for dataset in FengQ_2015 GuptaA_2019 ThomasAM_2019_a ThomasAM_2019_b ThomasAM_2019_c VogtmannE_2016 WirbelJ_2018 YachidaS_2019 YuJ_2015 ZellerG_2014
+do
   find /shares/CIBIO-Storage/CM/scratch/data/meta/${dataset}/humann-3.0_v30_CHOCOPhlAn_201901 -name *_genefamilies.tsv | xargs -I {} -P 50 bash -c 'x={}; humann2_renorm_table --input ${x} --units relab --update-snames 2>/dev/null --output ${x/genefamilies/genefamilies-relab}'
 done
 ```
@@ -175,7 +179,7 @@ hnn_normalizedgenefamilies <- lapply(CRC_datasets, function(dataset) {
   dataset_hnn_path <- paste('/shares/CIBIO-Storage/CM/scratch/data/meta', dataset, 'humann-3.0_v30_CHOCOPhlAn_201901', sep = '/')
   lapply(list.files(dataset_hnn_path), function(sample) {
     if(sample %in% metadata$sampleID){
-      paste(dataset_hnn_path, sample, paste0(sample,"_genefamilies-cpm.tsv"), sep = '/')
+      paste(dataset_hnn_path, sample, paste0(sample,"_genefamilies-grouped.tsv"), sep = '/')
     }
   })
 }) %>% unlist
@@ -191,6 +195,7 @@ hnn_pathcoverage <- lapply(CRC_datasets, function(dataset) {
 
 cutC_NR90_ids <- strsplit(read_file("cutC_NR90"), '\n')[[1]]
 cutD_NR90_ids <- strsplit(read_file("cutD_NR90"), '\n')[[1]]
+yeaW_NR90_ids <- strsplit(read_file("yeaW_NR90"), '\n')[[1]]
 
 hnn_pwyab <- lapply(hnn_pathabundance, function(sample_path) {
                           if (file.exists(sample_path)){
@@ -205,16 +210,16 @@ hnn_pwyab <- lapply(hnn_pathabundance, function(sample_path) {
   
 
 
-# hnn_genfam_cutC <- lapply(hnn_genefamilies, function(sample_path) {
-#                           if (file.exists(sample_path)){
-#                             read_tsv(sample_path) %>%
-#                               filter(str_detect(.$`# Gene Family`, paste(cutC_NR90,collapse = '|'))) %>% 
-#                               pivot_longer(-1, names_to = 'sample', values_to = 'RPK') %>%
-#                               mutate(sample = str_replace(sample, '_Abundance-RPKs',''))
-#                           }
-#                   }) %>%
-#               bind_rows %>%
-#               pivot_wider(names_from = 'sample', values_from = 'RPK')
+hnn_genfam <- lapply(hnn_genefamilies, function(sample_path) {
+                          if (file.exists(sample_path)){
+                            read_tsv(sample_path) %>%
+                              pivot_longer(-1, names_to = 'sample', values_to = 'RPK') %>%
+                              filter(str_detect(`# Gene Family`, '\\|', negate=TRUE)) %>% 
+                              mutate(sample = str_replace(sample, '_Abundance-RPKs',''))
+                          }
+                  }) %>%
+              bind_rows %>%
+              pivot_wider(names_from = 'sample', values_from = 'RPK')
 
 hnn_pwycov <- lapply(hnn_pathcoverage, function(sample_path) {
                           if (file.exists(sample_path)){
@@ -237,7 +242,13 @@ for dataset in FengQ_2015 GuptaA_2019 ThomasAM_2019_a ThomasAM_2019_b ThomasAM_2
 do
   find /shares/CIBIO-Storage/CM/scratch/data/meta/${dataset}/humann-3.0_v30_CHOCOPhlAn_201901 -name "*_genefamilies-relab.tsv" | xargs -I {} -P 100 bash -c 'x={}; grep -Fwf /shares/CIBIO-Storage/CM/news/users/francesco.beghini/chocophlan_paper/CRC_metaphlan3/cutC_NR90 $x | grep -v "|" | awk -v a=${x##*/} "{print \$0 \"\t\" a }"'
 done > merged_cutC_RPK_relabnorm.tsv
+
+for dataset in FengQ_2015 GuptaA_2019 ThomasAM_2019_a ThomasAM_2019_b ThomasAM_2019_c VogtmannE_2016 WirbelJ_2018 YachidaS_2019 YuJ_2015 ZellerG_2014
+do
+  find /shares/CIBIO-Storage/CM/scratch/data/meta/${dataset}/humann-3.0_v30_CHOCOPhlAn_201901 -name "*_genefamilies-cpm.tsv" | xargs -I {} -P 100 bash -c 'x={}; grep -Fwf /shares/CIBIO-Storage/CM/news/users/francesco.beghini/chocophlan_paper/CRC_metaphlan3/yeaW_NR90 $x | grep -v "|" | awk -v a=${x##*/} "{print \$0 \"\t\" a }"'
+done > merged_yeaW_RPK_CPM.tsv
 ```
+
 
 ```{r load_cutC_RPK, message=FALSE, warning=FALSE}
 NR90_cutC <- read_tsv("merged_cutCD_RPK_CPM.tsv", col_names = c('NR90', 'RPK', 'sample')) %>% 
@@ -275,6 +286,23 @@ rownames(missing_samples) <- rownames(NR90_cutD)
 NR90_cutD <- cbind(missing_samples, NR90_cutD)
 ```
 
+```{r load_yeaW_RPK, message=FALSE, warning=FALSE}
+NR90_yeaW <- read_tsv("merged_yeaW_RPK_CPM.tsv", col_names = c('NR90', 'RPK', 'sample')) %>% 
+  filter(NR90 %in% yeaW_NR90_ids) %>% 
+  mutate(sample = str_remove(sample, "_genefamilies.*")) %>% 
+  filter(sample %in% metadata$sampleID) %>% 
+  pivot_wider(names_from = 'sample', values_from = 'RPK', values_fill = list(RPK = 0)) %>% 
+  column_to_rownames('NR90')
+
+missing_samples_lst <- metadata[!(metadata$sampleID %in% colnames(NR90_cutD)),2]
+missing_samples <- as.data.frame(matrix(data = 0, nrow = nrow(NR90_yeaW), ncol = length(missing_samples_lst)))
+colnames(missing_samples) <- missing_samples_lst
+rownames(missing_samples) <- rownames(NR90_yeaW)
+
+## cutC + cutD // pathway PWY-7167 L-carnitine (PWY-3641). Maybe checkout yeaW 
+
+NR90_yeaW <- cbind(missing_samples, NR90_yeaW)
+```
 
 ```{r, fig.height=8, fig.width=10}
 x <- colorRamp2(breaks = seq(0,1,0.1), colors = hcl.colors(11, palette = 'Inferno'), transparency = 0.1, )
@@ -307,6 +335,17 @@ NR90_cutC %>%
 
 ```{r}
 NR90_cutD %>%
+  rownames_to_column('NR90') %>%
+  pivot_longer(-NR90, names_to = 'sample', values_to = 'RPK') %>%
+  full_join(metadata, by = c('sample' = 'sampleID')) %>% 
+  mutate(study_condition = factor(study_condition)) %>% 
+  mutate(dataset_name = str_replace(dataset_name, 'ThomasAM_2019_c', 'YachidaS_2019')) %>%
+  group_by(dataset_name) %>%
+  summarise(wilcox = wilcox.test(RPK ~ study_condition, paired=FALSE)$p.value %>% round(10))
+```
+
+```{r}
+NR90_yeaW %>%
   rownames_to_column('NR90') %>%
   pivot_longer(-NR90, names_to = 'sample', values_to = 'RPK') %>%
   full_join(metadata, by = c('sample' = 'sampleID')) %>% 
