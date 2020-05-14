@@ -31,7 +31,6 @@ rownames(mpa_table) <- rownames(metadata)
 
 
 ```{r calculate MDS}
-mds_res_norm <- cmdscale(vegdist(sinh(sqrt(mpa_table)), method = 'bray', diag = TRUE, upper = FALSE))
 mds_res_nonorm <- cmdscale(vegdist(mpa_table, method = 'bray', diag = TRUE, upper = FALSE))
 ```
 
@@ -40,6 +39,7 @@ mds_res_nonorm %>%
   as.data.frame() %>% 
   rownames_to_column('sampleID') %>% 
   left_join(metadata %>%  rownames_to_column('sampleID')) %>% 
+  filter(dataset_name != 'ThomasAM_2019_c') %>% 
   select(sampleID, MDS1=V1, MDS2=V2, study_condition, dataset_name) %>% 
 ggplot() +
   geom_point(aes(MDS1,MDS2, shape=study_condition, color=dataset_name), size=1.5) +

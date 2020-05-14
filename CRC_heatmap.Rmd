@@ -12,7 +12,7 @@ library(ComplexHeatmap)
 library(circlize)
 library(curatedMetagenomicData)
 # MTA_palette <- c("#0039A6","#FF6319","#6CBE45","#996633","#A7A9AC","#FCCC0A","#808183","#EE352E","#00933C","#B933AD")
-MTA_palette <- c("#0039A6","#fc9665","#6CBE45","#996633","#a3a3a3","#FCCC0A","#000000","#ff1919","#00933C","#B933AD")
+MTA_palette <- c("#0039A6","#fc9665","#6CBE45","#996633","#FCCC0A","#000000","#ff1919","#00933C","#B933AD")
 CRC_datasets <- strsplit(read_file("CRC_datasets.lst"), '\n')[[1]]
 ThomasA_2019_datasets <- c('FengQ_2015', 'YuJ_2015', 'ZellerG_2014', 'VogtmannE_2016', 'HanniganGD_2017', 'ThomasAM_2018a', 'ThomasAM_2018b')
 theme_cm <- function(...){
@@ -50,6 +50,17 @@ metadata %<>% mutate(dataset_name = as.factor(dataset_name),
                      gender = factor(gender),
                      country = factor(country))
 
+mpa_table %<>% 
+  select(-all_of(
+    metadata %>%
+      filter(dataset_name == 'ThomasAM_2019_c') %>%
+      pull(sampleID)
+  ))
+
+metadata %<>%
+  filter(dataset_name != 'ThomasAM_2019_c')
+metadata$dataset_name <-  droplevels(metadata$dataset_name)
+
 markers <- c("Roseburia_intestinalis", "Roseburia_sp_CAG_303", "Streptococcus_oralis", "Bacteroides_nordii", "Intestinimonas_butyriciproducens", "Prevotella_intermedia", "Fretibacterium_fastidiosum", "Methanobrevibacter_smithii", "Bacteroides_fragilis", "Mogibacterium_diversum", "Porphyromonas_asaccharolytica", "Eisenbergiella_tayi", "Bulleidia_extructa", "Peptostreptococcus_anaerobius", "Solobacterium_moorei", "Peptostreptococcus_stomatis", "Gemella_morbillorum", "Fusobacterium_nucleatum", "Dialister_pneumosintes", "Parvimonas_micra")
 ```
 
@@ -73,7 +84,7 @@ mpa_table_markers <-
   filter(species %in% markers) %>%
   arrange(desc(rowMeans(.[,-1]))) %>% 
   select(species, noquote(metadata %>% arrange(study_condition) %>% select(sampleID)) %>% t %>% as.character) %>% 
-  mutate_if(is.numeric, funs(log10(1+.))) %>% 
+  mutate_if(is.numeric, ~ log10(1+.)) %>% 
   mutate(species = gsub('_',' ', species)) %>% 
   column_to_rownames('species')
 ```
@@ -155,17 +166,17 @@ ComplexHeatmap::Heatmap(log10(1+as.matrix(top30_mpa_table)),
 ### Normalize per CPM
 ```{bash eval=FALSE, include=FALSE}
 conda activate humann-3.0
-for dataset in FengQ_2015 GuptaA_2019 ThomasAM_2019_a ThomasAM_2019_b ThomasAM_2019_c VogtmannE_2016 WirbelJ_2018 YachidaS_2019 YuJ_2015 ZellerG_2014
+for dataset in FengQ_2015 GuptaA_2019 ThomasAM_2019_a ThomasAM_2019_b VogtmannE_2016 WirbelJ_2018 YachidaS_2019 YuJ_2015 ZellerG_2014
 do
   find /shares/CIBIO-Storage/CM/scratch/data/meta/${dataset}/humann-3.0_v30_CHOCOPhlAn_201901 -name *_genefamilies.tsv | xargs -I {} -P 50 bash -c 'x={}; humann2_renorm_table --input ${x} --units cpm --update-snames 2>/dev/null --output ${x/genefamilies/genefamilies-cpm}'
 done
 
-for dataset in FengQ_2015 GuptaA_2019 ThomasAM_2019_a ThomasAM_2019_b ThomasAM_2019_c VogtmannE_2016 WirbelJ_2018 YachidaS_2019 YuJ_2015 ZellerG_2014
+for dataset in FengQ_2015 GuptaA_2019 ThomasAM_2019_a ThomasAM_2019_b VogtmannE_2016 WirbelJ_2018 YachidaS_2019 YuJ_2015 ZellerG_2014
 do
   find /shares/CIBIO-Storage/CM/scratch/data/meta/${dataset}/humann-3.0_v30_CHOCOPhlAn_201901 -name *_genefamilies.tsv | xargs -I {} -P 100 bash -c 'x={}; humann_regroup_table --input ${x} --output ${x/genefamilies/genefamilies-grouped} --group uniref90_level4ec'
 done
 
-for dataset in FengQ_2015 GuptaA_2019 ThomasAM_2019_a ThomasAM_2019_b ThomasAM_2019_c VogtmannE_2016 WirbelJ_2018 YachidaS_2019 YuJ_2015 ZellerG_2014
+for dataset in FengQ_2015 GuptaA_2019 ThomasAM_2019_a ThomasAM_2019_b VogtmannE_2016 WirbelJ_2018 YachidaS_2019 YuJ_2015 ZellerG_2014
 do
   find /shares/CIBIO-Storage/CM/scratch/data/meta/${dataset}/humann-3.0_v30_CHOCOPhlAn_201901 -name *_genefamilies-grouped.tsv | xargs -I {} -P 100 bash -c 'x={}; humann_renorm_table --input ${x} --units cpm --update-snames --output ${x/genefamilies-ecgrouped/genefamilies-ecgrouped-cpm_norm}'
 done
@@ -173,7 +184,7 @@ done
 
 
 ```{r load_humann_pwy, warning=FALSE, message=FALSE}
-CRC_datasets <- c("FengQ_2015", "GuptaA_2019", "ThomasAM_2019_a", "ThomasAM_2019_b", "ThomasAM_2019_c", "VogtmannE_2016", "WirbelJ_2018", "YachidaS_2019", "YuJ_2015", "ZellerG_2014")
+CRC_datasets <- c("FengQ_2015", "GuptaA_2019", "ThomasAM_2019_a", "ThomasAM_2019_b", "VogtmannE_2016", "WirbelJ_2018", "YachidaS_2019", "YuJ_2015", "ZellerG_2014")
 hnn_pathabundance <- lapply(CRC_datasets, function(dataset) { 
   dataset_hnn_path <- paste('/shares/CIBIO-Storage/CM/scratch/data/meta', dataset, 'humann-3.0_v30_CHOCOPhlAn_201901', sep = '/')
   lapply(list.files(dataset_hnn_path), function(sample) {
@@ -252,17 +263,17 @@ hnn_pwycov <- lapply(hnn_pathcoverage, function(sample_path) {
 ```
 
 ```{bash eval=FALSE, include=FALSE}
-for dataset in FengQ_2015 GuptaA_2019 ThomasAM_2019_a ThomasAM_2019_b ThomasAM_2019_c VogtmannE_2016 WirbelJ_2018 YachidaS_2019 YuJ_2015 ZellerG_2014
+for dataset in FengQ_2015 GuptaA_2019 ThomasAM_2019_a ThomasAM_2019_b VogtmannE_2016 WirbelJ_2018 YachidaS_2019 YuJ_2015 ZellerG_2014
 do
   find /shares/CIBIO-Storage/CM/scratch/data/meta/${dataset}/humann-3.0_v30_CHOCOPhlAn_201901 -name *_genefamilies-cpm.tsv | xargs -I {} -P 100 bash -c 'x={}; grep -Fwf /shares/CIBIO-Storage/CM/news/users/francesco.beghini/chocophlan_paper/CRC_metaphlan3/cutC_NR90 $x | grep -v "|" | awk -v a=${x##*/} "{print \$0 \"\t\" a }"'
 done > merged_cutC_RPK_CPM.tsv
 
-for dataset in FengQ_2015 GuptaA_2019 ThomasAM_2019_a ThomasAM_2019_b ThomasAM_2019_c VogtmannE_2016 WirbelJ_2018 YachidaS_2019 YuJ_2015 ZellerG_2014
+for dataset in FengQ_2015 GuptaA_2019 ThomasAM_2019_a ThomasAM_2019_b VogtmannE_2016 WirbelJ_2018 YachidaS_2019 YuJ_2015 ZellerG_2014
 do
   find /shares/CIBIO-Storage/CM/scratch/data/meta/${dataset}/humann-3.0_v30_CHOCOPhlAn_201901 -name *_genefamilies-cpm.tsv | xargs -I {} -P 100 bash -c 'x={}; grep -Fwf /shares/CIBIO-Storage/CM/news/users/francesco.beghini/chocophlan_paper/CRC_metaphlan3/cutD_NR90 $x | grep -v "|" | awk -v a=${x##*/} "{print \$0 \"\t\" a }"'
 done > merged_cutD_RPK_CPM.tsv
 
-for dataset in FengQ_2015 GuptaA_2019 ThomasAM_2019_a ThomasAM_2019_b ThomasAM_2019_c VogtmannE_2016 WirbelJ_2018 YachidaS_2019 YuJ_2015 ZellerG_2014
+for dataset in FengQ_2015 GuptaA_2019 ThomasAM_2019_a ThomasAM_2019_b VogtmannE_2016 WirbelJ_2018 YachidaS_2019 YuJ_2015 ZellerG_2014
 do
   find /shares/CIBIO-Storage/CM/scratch/data/meta/${dataset}/humann-3.0_v30_CHOCOPhlAn_201901 -name "*_genefamilies-cpm.tsv" | xargs -I {} -P 100 bash -c 'x={}; grep -Fwf /shares/CIBIO-Storage/CM/news/users/francesco.beghini/chocophlan_paper/CRC_metaphlan3/yeaW_NR90 $x | grep -v "|" | awk -v a=${x##*/} "{print \$0 \"\t\" a }"'
 done > merged_yeaW_RPK_CPM.tsv
@@ -326,7 +337,6 @@ NR90_cutC %>%
   summarise(CPM = sum(CPM)) %>% 
   full_join(metadata, by = c('sample' = 'sampleID')) %>% 
   mutate(study_condition = factor(study_condition)) %>% 
-  mutate(dataset_name = str_replace(dataset_name, 'ThomasAM_2019_c', 'YachidaS_2019')) %>%
   group_by(dataset_name) %>%
   summarise(wilcox = wilcox.test(CPM ~ study_condition, paired=FALSE)$p.value %>% round(4))
 ```
@@ -341,7 +351,6 @@ hnn_ec %>%
   summarise(CPM = sum(CPM)) %>%   
   full_join(metadata, by = c('sample' = 'sampleID')) %>% 
   mutate(study_condition = factor(study_condition)) %>% 
-  mutate(dataset_name = str_replace(dataset_name, 'ThomasAM_2019_c', 'YachidaS_2019')) %>%
   group_by(dataset_name) %>%
   summarise(wilcox = wilcox.test(CPM ~ study_condition, paired=FALSE)$p.value %>% round(4))
 ```
@@ -355,7 +364,6 @@ NR90_cutD %>%
   summarise(CPM = sum(CPM)) %>% 
   full_join(metadata, by = c('sample' = 'sampleID')) %>% 
   mutate(study_condition = factor(study_condition)) %>% 
-  mutate(dataset_name = str_replace(dataset_name, 'ThomasAM_2019_c', 'YachidaS_2019')) %>%
   group_by(dataset_name) %>%
   summarise(wilcox = wilcox.test(CPM ~ study_condition, paired=FALSE)$p.value %>% round(4))
 ```
@@ -367,7 +375,6 @@ NR90_yeaW %>%
   pivot_longer(-NR90, names_to = 'sample', values_to = 'RPK') %>%
   full_join(metadata, by = c('sample' = 'sampleID')) %>% 
   mutate(study_condition = factor(study_condition)) %>% 
-  mutate(dataset_name = str_replace(dataset_name, 'ThomasAM_2019_c', 'YachidaS_2019')) %>%
   group_by(dataset_name) %>%
   summarise(wilcox = wilcox.test(RPK ~ study_condition, paired=FALSE)$p.value %>% round(10))
 ```
@@ -380,7 +387,6 @@ NR90_cutC %>%
   group_by(sample) %>% 
   summarise(CPM = sum(CPM)) %>% 
   full_join(metadata, by = c('sample' = 'sampleID')) %>%
-  filter(dataset_name != 'ThomasAM_2019_c') %>% 
   ggplot(aes(dataset_name,log(1+CPM))) +
   stat_boxplot(aes(fill=study_condition)) + 
   theme_cm(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1.05), axis.line = element_line()) + 
