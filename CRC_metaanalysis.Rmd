@@ -70,8 +70,30 @@ mpa_table <- read_tsv('tables/CRC_mpa3_statq01.tsv') %>%
               mutate(ID = gsub('^.*s__','',ID))
 
 colnames(mpa_table) <- gsub('_profile','', colnames(mpa_table))
+mpa_table %<>% select(ID, metadata$sampleID)
 
-markers <- c("Roseburia_intestinalis", "Roseburia_sp_CAG_303", "Streptococcus_oralis", "Bacteroides_nordii", "Intestinimonas_butyriciproducens", "Prevotella_intermedia", "Fretibacterium_fastidiosum", "Methanobrevibacter_smithii", "Bacteroides_fragilis", "Mogibacterium_diversum", "Porphyromonas_asaccharolytica", "Eisenbergiella_tayi", "Bulleidia_extructa", "Peptostreptococcus_anaerobius", "Solobacterium_moorei", "Peptostreptococcus_stomatis", "Gemella_morbillorum", "Fusobacterium_nucleatum", "Dialister_pneumosintes", "Parvimonas_micra")
+markers <- c(
+  "Streptococcus_anginosus_group",
+  "Gemella_haemolysans",
+  "Slackia_exigua",
+  "Porphyromonas_uenonis",
+  "Peptostreptococcus_anaerobius",
+  "Bacteroides_nordii",
+  "Selenomonas_sputigena",
+  "Bacteroides_fragilis",
+  "Eisenbergiella_tayi",
+  "Gemella_bergeri",
+  "Prevotella_intermedia",
+  "Porphyromonas_asaccharolytica",
+  "Bulleidia_extructa",
+  "Ruthenibacterium_lactatiformans",
+  "Solobacterium_moorei",
+  "Dialister_pneumosintes",
+  "Peptostreptococcus_stomatis",
+  "Fusobacterium_nucleatum",
+  "Gemella_morbillorum",
+  "Parvimonas_micra"
+)
 ```
 
 
@@ -151,8 +173,6 @@ shared_samples <- inner_join(metadata %>% filter(sampleID %in% colnames(rarefied
 rarefied_mpa2_table %<>% select(ID, shared_samples)
 rarefied_mpa3_table %<>% select(ID, shared_samples)
 
-dim(rarefied_mpa2_table)
-dim(rarefied_mpa3_table)
 nspecies_mpa3 <- tibble(sample = colnames(rarefied_mpa3_table[,-1]), count = colSums(rarefied_mpa3_table[,-1] > 0 ))
 nspecies_mpa2 <- tibble(sample = colnames(rarefied_mpa2_table[,-1]), count = colSums(rarefied_mpa2_table[,-1] > 0 ))
 ```
@@ -188,12 +208,12 @@ left_join(nspecies_mpa3, metadata, by = c('sample' = 'sampleID')) %>%
 ```{r}
 mpa_table_markers <-
   mpa_table %>%
-  filter(species %in% markers) %>%
+  filter(ID %in% markers) %>%
   arrange(desc(rowMeans(.[,-1]))) %>% 
-  select(species, noquote(metadata %>% arrange(study_condition) %>% select(sampleID)) %>% t %>% as.character) %>% 
+  select(ID, noquote(metadata %>% arrange(study_condition) %>% select(sampleID)) %>% t %>% as.character) %>% 
   mutate_if(is.numeric, ~ log10(1+.)) %>% 
-  mutate(species = gsub('_',' ', species)) %>% 
-  column_to_rownames('species')
+  mutate(ID = gsub('_',' ', ID)) %>% 
+  column_to_rownames('ID')
 ```
 
 
@@ -251,11 +271,11 @@ Heatmap(as.matrix(mpa_table_markers),
 # Heatmap: Relative abundance of top 10 species
 ```{r}
 top30_mpa_table <- mpa_table %>% 
-  select(species, noquote(metadata %>% arrange(study_condition) %>% select(sampleID)) %>% t %>% as.character) %>% 
+  select(ID, noquote(metadata %>% arrange(study_condition) %>% select(sampleID)) %>% t %>% as.character) %>% 
   # mutate_if(is.numeric, funs(log10(1+.))) %>% 
-  mutate(species = gsub('_',' ', species)) %>% 
+  mutate(ID = gsub('_',' ', ID)) %>% 
   top_n(10, wt = rowMeans(.[,-1])) %>% 
-  column_to_rownames('species')
+  column_to_rownames('ID')
 
 
 annot_v <- metadata %>% 
@@ -283,7 +303,7 @@ ComplexHeatmap::Heatmap(log10(1+as.matrix(top30_mpa_table)),
         cluster_column_slices = TRUE,
         show_column_dend = FALSE,
         row_names_gp = gpar(fontface = 'italic', fontfamily = "sans"),
-        heatmap_legend_param = list(direction = 'vertical', border = 'black', position = 'top', legend_height  = unit(10, 'cm'))
+        heatmap_legend_param = list(direction = 'horizontal', border = 'black', position = 'top')
 )
 ```
 
@@ -318,78 +338,84 @@ done
 ```{r load_humann_pwy, message=FALSE, warning=FALSE}
 CRC_datasets <- c("FengQ_2015", "GuptaA_2019", "ThomasAM_2019_a", "ThomasAM_2019_b", "VogtmannE_2016", "WirbelJ_2018", "YachidaS_2019", "YuJ_2015", "ZellerG_2014")
 
-hnn_pathabundance <- lapply(CRC_datasets, function(dataset) { 
-  dataset_hnn_path <- file.path('/shares/CIBIO-Storage/CM/scratch/data/meta', dataset, 'humann-3.0_v30_CHOCOPhlAn_201901')
-  lapply(list.files(dataset_hnn_path), function(sample) {
-    if(sample %in% metadata$sampleID){
-      file.path(dataset_hnn_path, sample, paste0(sample,"_pathabundance-cpm.tsv"))
-    }
-  })
-}) %>% unlist
-
-hnn_normalizedgenefamilies <- lapply(CRC_datasets, function(dataset) {
-  dataset_hnn_path <- file.path('/shares/CIBIO-Storage/CM/scratch/data/meta', dataset, 'humann-3.0_v30_CHOCOPhlAn_201901')
-  lapply(list.files(dataset_hnn_path), function(sample) {
-    if(sample %in% metadata$sampleID){
-      path=file.path(dataset_hnn_path, sample, paste0(sample,"_genefamilies-cpm.tsv"))
-      if(file.exists(path))
-        path
-    }
-  })
-}) %>% unlist
-
-hnn_normalizedEC <- lapply(CRC_datasets, function(dataset) {
-  dataset_hnn_path <- file.path('/shares/CIBIO-Storage/CM/scratch/data/meta', dataset, 'humann-3.0_v30_CHOCOPhlAn_201901')
-  lapply(list.files(dataset_hnn_path), function(sample) {
-    if(sample %in% metadata$sampleID){
-      file.path(dataset_hnn_path, sample, paste0(sample,"_genefamilies-ecgrouped-cpm_norm.tsv"))
-    }
-  })
-}) %>% unlist
-
-
-hnn_pathcoverage <- lapply(CRC_datasets, function(dataset) {
-  dataset_hnn_path <- file.path('/shares/CIBIO-Storage/CM/scratch/data/meta', dataset, 'humann-3.0_v30_CHOCOPhlAn_201901')
-  lapply(list.files(dataset_hnn_path), function(sample) {
-    if(sample %in% metadata$sampleID){
-    file.path(dataset_hnn_path, sample, paste0(sample,"_pathcoverage.tsv"))
-    }
-  })
-}) %>% unlist
+# hnn_pathabundance <- lapply(CRC_datasets, function(dataset) { 
+#   dataset_hnn_path <- file.path('/shares/CIBIO-Storage/CM/scratch/data/meta', dataset, 'humann-3.0_v30_CHOCOPhlAn_201901')
+#   lapply(list.files(dataset_hnn_path), function(sample) {
+#     if(sample %in% metadata$sampleID){
+#       file.path(dataset_hnn_path, sample, paste0(sample,"_pathabundance-cpm.tsv"))
+#     }
+#   })
+# }) %>% unlist
+# 
+# hnn_normalizedgenefamilies <- lapply(CRC_datasets, function(dataset) {
+#   dataset_hnn_path <- file.path('/shares/CIBIO-Storage/CM/scratch/data/meta', dataset, 'humann-3.0_v30_CHOCOPhlAn_201901')
+#   lapply(list.files(dataset_hnn_path), function(sample) {
+#     if(sample %in% metadata$sampleID){
+#       path=file.path(dataset_hnn_path, sample, paste0(sample,"_genefamilies-cpm.tsv"))
+#       if(file.exists(path))
+#         path
+#     }
+#   })
+# }) %>% unlist
+# 
+# hnn_normalizedEC <- lapply(CRC_datasets, function(dataset) {
+#   dataset_hnn_path <- file.path('/shares/CIBIO-Storage/CM/scratch/data/meta', dataset, 'humann-3.0_v30_CHOCOPhlAn_201901')
+#   lapply(list.files(dataset_hnn_path), function(sample) {
+#     if(sample %in% metadata$sampleID){
+#       file.path(dataset_hnn_path, sample, paste0(sample,"_genefamilies-ecgrouped-cpm_norm.tsv"))
+#     }
+#   })
+# }) %>% unlist
+# 
+# hnn_pathcoverage <- lapply(CRC_datasets, function(dataset) {
+#   dataset_hnn_path <- file.path('/shares/CIBIO-Storage/CM/scratch/data/meta', dataset, 'humann-3.0_v30_CHOCOPhlAn_201901')
+#   lapply(list.files(dataset_hnn_path), function(sample) {
+#     if(sample %in% metadata$sampleID){
+#     file.path(dataset_hnn_path, sample, paste0(sample,"_pathcoverage.tsv"))
+#     }
+#   })
+# }) %>% unlist
 
 cutC_NR90_ids <- strsplit(read_file("cutC_NR90"), '\n')[[1]]
 cutD_NR90_ids <- strsplit(read_file("cutD_NR90"), '\n')[[1]]
 yeaW_NR90_ids <- strsplit(read_file("yeaW_NR90"), '\n')[[1]]
 
-hnn_pwyab <- data.table::rbindlist(mclapply(hnn_pathabundance, function(sample_path) {
-                            data.table::fread(cmd = paste0('grep -v "|" ', sample_path), nThread = 5, col.names = c('Pathway','relative_abundance')) %>% 
-                              cbind(sample = gsub("_pathabundance.tsv","",basename(sample_path)))
-                  }, mc.cores = 30))
-hnn_pwyab <- dcast(hnn_pwyab, Pathway ~ sample, value.var = "relative_abundance", fill = 0)
+# hnn_pwyab <- data.table::rbindlist(mclapply(hnn_pathabundance, function(sample_path) {
+#                             data.table::fread(cmd = paste0('grep -v "|" ', sample_path), nThread = 5, col.names = c('Pathway','relative_abundance')) %>% 
+#                               cbind(sample = gsub("_pathabundance.tsv","",basename(sample_path)))
+#                   }, mc.cores = 30))
+# hnn_pwyab <- dcast(hnn_pwyab, Pathway ~ sample, value.var = "relative_abundance", fill = 0)
 
+# hnn_genefamilies <- data.table::rbindlist(mclapply(hnn_normalizedgenefamilies, function(sample_path) {
+#                             data.table::fread(cmd = paste0('grep -v "|" ', sample_path), nThread = 5, col.names = c('GeneFamily','relative_abundance')) %>% 
+#                               cbind(sample = gsub("_genefamilies-cpm.tsv","",basename(sample_path)))
+#                   }, mc.cores = 30))
+# hnn_genefamilies <- dcast(hnn_genefamilies, GeneFamily ~ sample, value.var = "relative_abundance", fill = 0)
 
-hnn_genefamilies <- data.table::rbindlist(mclapply(hnn_normalizedgenefamilies, function(sample_path) {
-                            data.table::fread(cmd = paste0('grep -v "|" ', sample_path), nThread = 5, col.names = c('GeneFamily','relative_abundance')) %>% 
-                              cbind(sample = gsub("_genefamilies-cpm.tsv","",basename(sample_path)))
-                  }, mc.cores = 30))
-hnn_genefamilies <- dcast(hnn_genefamilies, GeneFamily ~ sample, value.var = "relative_abundance", fill = 0)
-#hnn_genefamilies <- fread('genefamilies_wide.tsv', nThread = 50)
+# hnn_ec <- data.table::rbindlist(mclapply(hnn_normalizedEC, function(sample_path) {
+#                             data.table::fread(cmd = paste0('grep -v "|" ', sample_path), nThread = 5, col.names = c('EC','relative_abundance')) %>% 
+#                               cbind(sample = gsub("_genefamilies-ecgrouped-cpm_norm.tsv","",basename(sample_path)))
+#                   }, mc.cores = 30))
+# hnn_ec <- dcast(hnn_ec, EC ~ sample, value.var = "relative_abundance", fill = 0)
 
-hnn_ec <- data.table::rbindlist(mclapply(hnn_normalizedEC, function(sample_path) {
-                            data.table::fread(cmd = paste0('grep -v "|" ', sample_path), nThread = 5, col.names = c('EC','relative_abundance')) %>% 
-                              cbind(sample = gsub("_genefamilies-ecgrouped-cpm_norm.tsv","",basename(sample_path)))
-                  }, mc.cores = 30))
-hnn_ec <- dcast(hnn_ec, EC ~ sample, value.var = "relative_abundance", fill = 0)
+# hnn_pwycov <- lapply(hnn_pathcoverage, function(sample_path) {
+#                           if (file.exists(sample_path)){
+#                             read_tsv(sample_path) %>%
+#                               pivot_longer(-1, names_to = 'sample', values_to = 'coverage') %>%
+#                               mutate(sample = str_replace(sample, '_Coverage',''))
+#                           }
+#                   }) %>%
+#               bind_rows %>%
+#               pivot_wider(names_from = 'sample', values_from = 'coverage')
 
-hnn_pwycov <- lapply(hnn_pathcoverage, function(sample_path) {
-                          if (file.exists(sample_path)){
-                            read_tsv(sample_path) %>%
-                              pivot_longer(-1, names_to = 'sample', values_to = 'coverage') %>%
-                              mutate(sample = str_replace(sample, '_Coverage',''))
-                          }
-                  }) %>%
-              bind_rows %>%
-              pivot_wider(names_from = 'sample', values_from = 'coverage')
+hnn_pwyab <- data.table::fread('tables/humann3_pathabundance_CRC_cohorts_cpm_unstratified.tsv')
+colnames(hnn_pwyab) <- gsub('_Abundance','', colnames(hnn_pwyab))
+hnn_pwyab %<>% select(Pathway, metadata$sampleID)
+
+hnn_ec <- data.table::fread('tables/CRC_humann3_ecs_cpm_ungrouped.tsv')
+colnames(hnn_ec) <- gsub('_Abundance-CPM','', colnames(hnn_ec))
+colnames(hnn_ec)[1] <- 'EC'
+hnn_ec %<>% select(EC, metadata$sampleID)
 ```
 
 
@@ -397,6 +423,7 @@ hnn_pwycov <- lapply(hnn_pathcoverage, function(sample_path) {
 ```{r}
 mds_pwy <- cmdscale(vegdist(t(hnn_pwyab[,-1]), diag = TRUE, upper = FALSE, method = 'bray'))
 ```
+
 
 ```{r CRC_MDS_pwys, fig.width=8, fig.height=4.5, fig.retina=TRUE}
 mds_pwy %>% 
@@ -413,8 +440,9 @@ ggplot() +
 
 # MDS: ECs
 ```{r}
-mds_ecs <- cmdscale(vegdist(t(hnn_ec[,-1]), diag = TRUE, upper = FALSE, method = 'bray'))
+mds_ecs <- cmdscale(vegdist(t(hnn_ec[,-1]), diag = TRUE, upper = FALSE, method = 'bray'), )
 ```
+
 
 ```{r CRC_MDS_ecs, fig.width=8, fig.height=4.5, fig.retina=TRUE}
 mds_ecs %>% 

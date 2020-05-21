@@ -31,7 +31,7 @@ effect_size_calc <- function(vector1, vector2) {
 }
 
 ### --- Species abundance meta analysis mpa3 stat_q 0.1 ------------------------------------------------------------------------------
-metadata <- read_tsv("CRC_analysis_metadata_final_version.tsv", col_names = T) %>% 
+metadata <- read_tsv("tables/CRC_analysis_metadata_final_version.tsv", col_names = T) %>% 
   as.data.frame(row.names = FALSE, stringsAsFactors=FALSE)
 metadata$study_condition <- gsub("CRC", "carcinoma", metadata$study_condition)
 rownames(metadata)[metadata$dataset_name == "FengQ_2015"] <- as.character(metadata$sampleID[metadata$dataset_name == "FengQ_2015"])
