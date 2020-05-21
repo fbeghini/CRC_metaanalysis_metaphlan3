@@ -193,7 +193,7 @@ p1 <- ggplot(effect_sizes, aes(Species, value, shape = variable, ymin=CI_Low, ym
 ggsave("figures/meta_analysis_mpa3_statq01_top20.svg", p1, width = 10, height = 8, device = "svg")
 
 ## ----------------- Species richness mpa3 rarefied stat_q 0.2 ----------------------------------------------------------------------------------------------------------------------------------------
-metadata <- read_tsv("CRC_metaanalysis_metaphlan3/CRC_analysis_metadata_final_version.tsv", col_names = T) %>% 
+metadata <- read_tsv("tables/CRC_analysis_metadata_final_version.tsv", col_names = T) %>% 
   as.data.frame(row.names = FALSE, stringsAsFactors=FALSE)
 metadata$study_condition <- gsub("CRC", "carcinoma", metadata$study_condition)
 rownames(metadata)[metadata$dataset_name == "FengQ_2015"] <- as.character(metadata$sampleID[metadata$dataset_name == "FengQ_2015"])
@@ -266,7 +266,7 @@ p1 <- ggplot(species_diversity, aes(Dataset, Observed, fill = Group, colour = Gr
 ggsave("figures/species_richness_mpa3_rarefied_statq02.svg", p1, width = 10, height = 8, device = "svg")
 
 ## ----------------- Species richness mpa3 rarefied stat_q 0.1 ----------------------------------------------------------------------------------------------------------------------------------------
-metadata <- read_tsv("CRC_analysis_metadata_final_version.tsv", col_names = T) %>% 
+metadata <- read_tsv("tables/CRC_analysis_metadata_final_version.tsv", col_names = T) %>% 
   as.data.frame(row.names = FALSE, stringsAsFactors=FALSE)
 metadata$study_condition <- gsub("CRC", "carcinoma", metadata$study_condition)
 rownames(metadata)[metadata$dataset_name == "FengQ_2015"] <- as.character(metadata$sampleID[metadata$dataset_name == "FengQ_2015"])
@@ -339,7 +339,7 @@ p1 <- ggplot(species_diversity, aes(Dataset, Observed, fill = Group, colour = Gr
 ggsave("figures/species_richness_mpa3_rarefied_statq01.svg", p1, width = 10, height = 8, device = "svg")
 
 ## ----------------- species richness mpa2 rarefied ----------------------------------------------------------------------------------------------------------------------------------------
-metadata <- read_tsv("CRC_analysis_metadata_final_version.tsv", col_names = T) %>% 
+metadata <- read_tsv("tables/CRC_analysis_metadata_final_version.tsv", col_names = T) %>% 
   as.data.frame(row.names = FALSE, stringsAsFactors=FALSE)
 metadata$study_condition <- gsub("CRC", "carcinoma", metadata$study_condition)
 rownames(metadata)[metadata$dataset_name == "FengQ_2015"] <- as.character(metadata$sampleID[metadata$dataset_name == "FengQ_2015"])
@@ -416,7 +416,7 @@ p1 <- ggplot(species_diversity, aes(Dataset, Observed, fill = Group, colour = Gr
 ggsave("figures/species_richness_mpa2_rarefied.svg", p1, width = 10, height = 8, device = "svg")
 
 ## ----------------- HumaNn3 pathways meta analysis ----------------------------------------------------------------------------------------------------------------------------------------
-metadata <- read_tsv("CRC_analysis_metadata_final_version.tsv", col_names = T) %>% 
+metadata <- read_tsv("tables/CRC_analysis_metadata_final_version.tsv", col_names = T) %>% 
   as.data.frame(row.names = FALSE, stringsAsFactors=FALSE)
 metadata$study_condition <- gsub("CRC", "carcinoma", metadata$study_condition)
 rownames(metadata)[metadata$dataset_name == "FengQ_2015"] <- as.character(metadata$sampleID[metadata$dataset_name == "FengQ_2015"])
@@ -565,7 +565,7 @@ p1 <- ggplot(effect_sizes, aes(Species, value, shape = variable, ymin=CI_Low, ym
 ggsave("figures/meta_analysis_pathways_top20.svg", p1, width = 10, height = 8, device = "svg")
 
 ## ----------------- HumaNn3 ECs meta analysis ----------------------------------------------------------------------------------------------------------------------------------------
-metadata <- read_tsv("CRC_analysis_metadata_final_version.tsv", col_names = T) %>% 
+metadata <- read_tsv("tables/CRC_analysis_metadata_final_version.tsv", col_names = T) %>% 
   as.data.frame(row.names = FALSE, stringsAsFactors=FALSE)
 metadata$study_condition <- gsub("CRC", "carcinoma", metadata$study_condition)
 rownames(metadata)[metadata$dataset_name == "FengQ_2015"] <- as.character(metadata$sampleID[metadata$dataset_name == "FengQ_2015"])
@@ -716,7 +716,7 @@ p1 <- ggplot(effect_sizes, aes(Description, value, shape = variable, ymin=CI_Low
 ggsave("figures/meta_analysis_ecs_top20.svg", p1, width = 10, height = 8, device = "svg")
 
 ## -----------------humann3 cutC and yeaW ----------------------------------------------------------------------------------------------------------------------------------------
-metadata <- read_tsv("CRC_analysis_metadata_final_version.tsv", col_names = T) %>% 
+metadata <- read_tsv("tables/CRC_analysis_metadata_final_version.tsv", col_names = T) %>% 
   as.data.frame(row.names = FALSE, stringsAsFactors=FALSE)
 metadata$study_condition <- gsub("CRC", "carcinoma", metadata$study_condition)
 rownames(metadata)[metadata$dataset_name == "FengQ_2015"] <- as.character(metadata$sampleID[metadata$dataset_name == "FengQ_2015"])
