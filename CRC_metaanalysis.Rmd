@@ -5,16 +5,16 @@ output:
     df_print: paged
 ---
 ```{r include=FALSE}
-knitr::opts_chunk$set(echo = FALSE, fig.path = 'CRC_metaanalysis_plots/', dev = c('png','svg'), warning = FALSE)
+library(svglite)
+knitr::opts_chunk$set(echo = FALSE, fig.path = 'CRC_metaanalysis_plots/', dev = c('png','svglite'), warning = FALSE)
 library(tidyverse)
 library(magrittr)
 library(ComplexHeatmap)
 library(circlize)
 library(vegan)
 library(data.table)
-library(curatedMetagenomicData)
 
-# MTA_palette <- c("#0039A6","#FF6319","#6CBE45","#996633","#A7A9AC","#FCCC0A","#808183","#EE352E","#00933C","#B933AD")
+# MTA_palette <-   c("#0039A6","#fc9665","#6CBE45","#996633","#A7A9AC","#FCCC0A","#000000","#EE352E","#00933C","#B933AD")
 MTA_palette <- c("#0039A6","#fc9665","#6CBE45","#996633","#FCCC0A","#000000","#ff1919","#00933C","#B933AD")
 CRC_datasets <- strsplit(read_file("CRC_datasets.lst"), '\n')[[1]]
 ThomasA_2019_datasets <- c('FengQ_2015', 'YuJ_2015', 'ZellerG_2014', 'VogtmannE_2016', 'HanniganGD_2017', 'ThomasAM_2018a', 'ThomasAM_2018b')
@@ -35,14 +35,13 @@ theme_cm <- function(...){
 
 ```{r load_data, message=FALSE, warning=FALSE}
 metadata <- read_tsv("tables/CRC_analysis_metadata_final_version.tsv") %>% 
-            filter(dataset_name != 'ThomasAM_2019_c') %>% 
             mutate(dataset_name = as.factor(dataset_name),
                    BMI = as.numeric(BMI),
                    age = as.numeric(age),
                    study_condition = factor(study_condition, labels = c('Control','CRC')),
                    gender = factor(gender),
                    country = factor(country))
-
+metadata$dataset_name <- gsub("ThomasAM_2019_c", "YachidaS_2019", metadata$dataset_name)
 
 # mpa_samples <- lapply(levels(metadata$dataset_name), function(dataset) {
 #   dataset_mpa_path <- file.path('/shares/CIBIO-Storage/CM/scratch/data/meta', dataset, 'metaphlan-3.0_v30_CHOCOPhlAn_201901')
@@ -106,7 +105,11 @@ filt_metadata <- metadata %>%
                          study_condition = factor(study_condition),
                          gender = factor(gender),
                          country = factor(country))
-filt_metadata %>% group_by(dataset_name, study_condition) %>% summarise(n()) %>% pivot_wider(names_from = 'study_condition', values_from = 'n()')
+
+filt_metadata %>% 
+  group_by(dataset_name, study_condition) %>% 
+  tally %>% 
+  pivot_wider(names_from = 'study_condition', values_from = 'n')
 ```
 
 # Alpha diversity of rarefied samples (0.1 percentile)
@@ -181,7 +184,7 @@ nspecies_mpa2 <- tibble(sample = colnames(rarefied_mpa2_table[,-1]), count = col
 left_join(nspecies_mpa3, metadata, by = c('sample' = 'sampleID')) %>%
 select(sample, count, dataset_name, study_condition) %>%
 group_by(dataset_name) %>%
-summarise(wilcox = wilcox.test(count ~ study_condition)$p.value %>% signif(2))
+summarize(wilcox = wilcox.test(count ~ study_condition)$p.value %>% signif(2))
 ```
 
 ```{r}
@@ -197,7 +200,7 @@ full_join(nspecies_mpa2, nspecies_mpa3, suffix = c("_mpa2","_mpa3"), by = "sampl
 ```{r metaphlan3_alpha_diversity_statq01, fig.height=3}
 left_join(nspecies_mpa3, metadata, by = c('sample' = 'sampleID')) %>% 
   select(sample, count, dataset_name, study_condition) %>% 
-  ggplot(aes(dataset_name,count)) +
+  ggplot(aes(reorder(dataset_name, -count, mean) ,count)) +
   stat_boxplot(aes(fill=study_condition)) + 
   theme_cm(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1.05), axis.line = element_line()) + 
   scale_fill_manual(values = c('#758862', '#AC5248'), name = 'Condition') + 
@@ -313,22 +316,22 @@ ComplexHeatmap::Heatmap(log10(1+as.matrix(top30_mpa_table)),
 ```{bash eval=FALSE, include=FALSE}
 conda activate humann-3.0
 
-for dataset in FengQ_2015 GuptaA_2019 ThomasAM_2019_a ThomasAM_2019_b VogtmannE_2016 WirbelJ_2018 YachidaS_2019 YuJ_2015 ZellerG_2014
+for dataset in FengQ_2015 GuptaA_2019 ThomasAM_2019_a ThomasAM_2019_b ThomasAM_2019_c VogtmannE_2016 WirbelJ_2018 YachidaS_2019 YuJ_2015 ZellerG_2014
 do
   find /shares/CIBIO-Storage/CM/scratch/data/meta/${dataset}/humann-3.0_v30_CHOCOPhlAn_201901 -name *_pathabundance.tsv | xargs -I {} -P 100 bash -c 'x={}; humann_renorm_table --input ${x} --units cpm --update-snames --output ${x/pathabundance/pathabundance-cpm} 2>/dev/null'
 done
 
-for dataset in FengQ_2015 GuptaA_2019 ThomasAM_2019_a ThomasAM_2019_b VogtmannE_2016 WirbelJ_2018 YachidaS_2019 YuJ_2015 ZellerG_2014
+for dataset in FengQ_2015 GuptaA_2019 ThomasAM_2019_a ThomasAM_2019_b ThomasAM_2019_c VogtmannE_2016 WirbelJ_2018 YachidaS_2019 YuJ_2015 ZellerG_2014
 do
   find /shares/CIBIO-Storage/CM/scratch/data/meta/${dataset}/humann-3.0_v30_CHOCOPhlAn_201901 -name *_genefamilies.tsv | xargs -I {} -P 100 bash -c 'x={}; humann_renorm_table --input ${x} --units cpm --update-snames --output ${x/genefamilies/genefamilies-cpm} 2>/dev/null'
 done
 
-for dataset in FengQ_2015 GuptaA_2019 ThomasAM_2019_a ThomasAM_2019_b VogtmannE_2016 WirbelJ_2018 YachidaS_2019 YuJ_2015 ZellerG_2014
+for dataset in FengQ_2015 GuptaA_2019 ThomasAM_2019_a ThomasAM_2019_b ThomasAM_2019_c VogtmannE_2016 WirbelJ_2018 YachidaS_2019 YuJ_2015 ZellerG_2014
 do
   find /shares/CIBIO-Storage/CM/scratch/data/meta/${dataset}/humann-3.0_v30_CHOCOPhlAn_201901 -name *_genefamilies.tsv | xargs -I {} -P 100 bash -c 'x={}; humann_regroup_table --input ${x} --output ${x/genefamilies/genefamilies-ecgrouped} --group uniref90_level4ec -e 10'
 done
 
-for dataset in FengQ_2015 GuptaA_2019 ThomasAM_2019_a ThomasAM_2019_b VogtmannE_2016 WirbelJ_2018 YachidaS_2019 YuJ_2015 ZellerG_2014
+for dataset in FengQ_2015 GuptaA_2019 ThomasAM_2019_a ThomasAM_2019_b ThomasAM_2019_c VogtmannE_2016 WirbelJ_2018 YachidaS_2019 YuJ_2015 ZellerG_2014
 do
   find /shares/CIBIO-Storage/CM/scratch/data/meta/${dataset}/humann-3.0_v30_CHOCOPhlAn_201901 -name *_genefamilies-ecgrouped.tsv | xargs -I {} -P 100 bash -c 'x={}; humann_renorm_table --input ${x} --units cpm --update-snames --output ${x/genefamilies-ecgrouped/genefamilies-ecgrouped-cpm_norm}'
 done
@@ -553,4 +556,116 @@ NR90_cutC %>%
   scale_fill_manual(values = c('#758862', '#AC5248'), name = 'Condition') + 
   xlab('Dataset name')
 ```
+
+```{r eval=FALSE, fig.height=4, fig.width=9, include=FALSE}
+ggplot(effect_sizes) + 
+  geom_point(size = 3.5, aes(Species, value, shape = variable, color= variable)) +
+  geom_linerange(aes(Species, value,ymin=CI_Low, ymax=CI_UP)) + 
+  scale_shape_manual(name = 'Dataset', values= c(19, 8, 11, 5, 2, 0, 13, 12, 4, 3)) + 
+  scale_color_manual(name = 'Dataset', values = c('black', MTA_palette)) +
+  coord_flip() +
+  theme_minimal() +
+  geom_hline(aes(yintercept = 0), color = "gray", linetype = "dashed") +
+  theme(axis.title.y = element_blank(), 
+        axis.title.x = element_text(family = "sans-serif", size = 7, colour = "black"),
+        axis.text = element_text(family = "sans-serif", size = 7, colour = "black"),
+        strip.text = element_text(family = "sans-serif", size = 12, colour = "black")
+        ) +
+  guides(shape = FALSE, color = FALSE)+
+  ylab("Effect size") 
+```
+
+
+## ML heatmap
+```{r ml_heatmap}
+ML <- tribble(~source, ~dataset, ~AUC, ~type, 
+              "MetaPhlAn 3\nspecies", "ZellerG_2014", .82, "LODO",
+              "MetaPhlAn 3\nspecies", "YuJ_2015", .90, "LODO",
+              "MetaPhlAn 3\nspecies", "FengQ_2015", .88, "LODO",
+              "MetaPhlAn 3\nspecies", "VogtmannE_2016", 0.82, "LODO",
+              "MetaPhlAn 3\nspecies", "WirbelJ_2018", 0.91, "LODO",
+              "MetaPhlAn 3\nspecies", "GuptaA_2019", 0.97, "LODO",
+              "MetaPhlAn 3\nspecies", "ThomasAM_2019_a", 0.76, "LODO",
+              "MetaPhlAn 3\nspecies", "ThomasAM_2019_b", 0.85, "LODO",
+              "MetaPhlAn 3\nspecies", "YachidaS_2019", 0.76, "LODO",
+              "HUMAnN 3\nE.C.", "ZellerG_2014", 0.7646, "LODO",
+              "HUMAnN 3\nE.C.", "YuJ_2015", 0.7147, "LODO",
+              "HUMAnN 3\nE.C.", "FengQ_2015", 0.732, "LODO",
+              "HUMAnN 3\nE.C.", "VogtmannE_2016", 0.6405, "LODO",
+              "HUMAnN 3\nE.C.", "WirbelJ_2018", 0.7385, "LODO",
+              "HUMAnN 3\nE.C.", "GuptaA_2019", 0.904, "LODO",
+              "HUMAnN 3\nE.C.", "ThomasAM_2019_a", 0.8813, "LODO",
+              "HUMAnN 3\nE.C.", "ThomasAM_2019_b", 0.6472, "LODO",
+              "HUMAnN 3\nE.C.", "YachidaS_2019", 0.6442, "LODO",
+              "HUMAnN 3\nGene Family","ZellerG_2014", 0.8295, "LODO",
+              "HUMAnN 3\nGene Family","YuJ_2015", 0.8158, "LODO",
+              "HUMAnN 3\nGene Family","FengQ_2015", 0.8386, "LODO",
+              "HUMAnN 3\nGene Family","VogtmannE_2016", 0.7097, "LODO",
+              "HUMAnN 3\nGene Family","WirbelJ_2018", 0.8060, "LODO",
+              "HUMAnN 3\nGene Family","GuptaA_2019", 0.9359, "LODO",
+              "HUMAnN 3\nGene Family","ThomasAM_2019_a", 0.8250, "LODO",
+              "HUMAnN 3\nGene Family","ThomasAM_2019_b", 0.7275, "LODO",
+              "HUMAnN 3\nGene Family","YachidaS_2019", 0.6871, "LODO",
+              "HUMAnN 3\nPathways", "ZellerG_2014",0.7655, "LODO",
+              "HUMAnN 3\nPathways", "YuJ_2015",0.6815, "LODO",
+              "HUMAnN 3\nPathways", "FengQ_2015",0.7207, "LODO",
+              "HUMAnN 3\nPathways", "VogtmannE_2016",0.6272, "LODO",
+              "HUMAnN 3\nPathways", "WirbelJ_2018",NA, "LODO",
+              "HUMAnN 3\nPathways", "GuptaA_2019",0.8793, "LODO",
+              "HUMAnN 3\nPathways", "ThomasAM_2019_a",0.8122, "LODO",
+              "HUMAnN 3\nPathways", "ThomasAM_2019_b",NA, "LODO",
+              "HUMAnN 3\nPathways", "YachidaS_2019",0.6089, "LODO",
+              "MetaPhlAn 3\nspecies", "ZellerG_2014", .87, "CV",
+              "MetaPhlAn 3\nspecies", "YuJ_2015", .89, "CV",
+              "MetaPhlAn 3\nspecies", "FengQ_2015", .90, "CV",
+              "MetaPhlAn 3\nspecies", "VogtmannE_2016", 0.68, "CV",
+              "MetaPhlAn 3\nspecies", "WirbelJ_2018", 0.93, "CV",
+              "MetaPhlAn 3\nspecies", "GuptaA_2019", 0.96, "CV",
+              "MetaPhlAn 3\nspecies", "ThomasAM_2019_a", 0.74, "CV",
+              "MetaPhlAn 3\nspecies", "ThomasAM_2019_b", 0.78, "CV",
+              "MetaPhlAn 3\nspecies", "YachidaS_2019", 0.85, "CV",
+              "HUMAnN 3\nE.C.", "ZellerG_2014", 0.83, "CV",
+              "HUMAnN 3\nE.C.", "YuJ_2015", 0.76, "CV",
+              "HUMAnN 3\nE.C.", "FengQ_2015", 0.79, "CV",
+              "HUMAnN 3\nE.C.", "VogtmannE_2016", 0.61, "CV",
+              "HUMAnN 3\nE.C.", "WirbelJ_2018", 0.78, "CV",
+              "HUMAnN 3\nE.C.", "GuptaA_2019", 0.96, "CV",
+              "HUMAnN 3\nE.C.", "ThomasAM_2019_a", 0.75, "CV",
+              "HUMAnN 3\nE.C.", "ThomasAM_2019_b", 0.73, "CV",
+              "HUMAnN 3\nE.C.", "YachidaS_2019", 0.79, "CV",
+              "HUMAnN 3\nGene Family","ZellerG_2014", 0.81, "CV",
+              "HUMAnN 3\nGene Family","YuJ_2015", 0.78, "CV",
+              "HUMAnN 3\nGene Family","FengQ_2015", 0.78, "CV",
+              "HUMAnN 3\nGene Family","VogtmannE_2016", 0.63, "CV",
+              "HUMAnN 3\nGene Family","WirbelJ_2018", 0.92, "CV",
+              "HUMAnN 3\nGene Family","GuptaA_2019", NA, "CV",
+              "HUMAnN 3\nGene Family","ThomasAM_2019_a", NA, "CV",
+              "HUMAnN 3\nGene Family","ThomasAM_2019_b", 0.71, "CV",
+              "HUMAnN 3\nGene Family","YachidaS_2019", NA, "CV",
+              "HUMAnN 3\nPathways", "ZellerG_2014",0.81, "CV",
+              "HUMAnN 3\nPathways", "YuJ_2015",0.67, "CV",
+              "HUMAnN 3\nPathways", "FengQ_2015",0.72, "CV",
+              "HUMAnN 3\nPathways", "VogtmannE_2016",0.63, "CV",
+              "HUMAnN 3\nPathways", "WirbelJ_2018",NA, "CV",
+              "HUMAnN 3\nPathways", "GuptaA_2019",0.95, "CV",
+              "HUMAnN 3\nPathways", "ThomasAM_2019_a",0.76, "CV",
+              "HUMAnN 3\nPathways", "ThomasAM_2019_b",NA, "CV",
+              "HUMAnN 3\nPathways", "YachidaS_2019",0.61, "CV",
+
+    )
+ML %>% 
+ggplot() + 
+  geom_tile(aes(x = type, y=dataset, fill=AUC), width=0.8) + 
+  geom_text(aes(x = type, y=dataset, label=signif(AUC,2), color= AUC < 0.73), size=4, fontface = 'bold') +
+  theme_cm(panel.grid.major.y = element_blank(),
+           strip.text = element_text(angle= 60),
+           legend.text = element_text(size = 10),
+           legend.title = element_text(size = 10)
+         ) +
+  colormap::scale_fill_colormap(colormap = 'hot', limits = c(0.5, 1)) +
+  scale_color_manual(guide = FALSE, values = c("black", "white"))+
+  facet_grid(~ source, ) +
+  xlab('') + ylab('Dataset')
+```
+
 

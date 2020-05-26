@@ -552,17 +552,44 @@ effect_sizes$variable <- revalue(effect_sizes$variable, replace = c("WirbelJ_201
 effect_sizes$variable <- factor(effect_sizes$variable, levels = c("RandomEffects", "ThomasAM_2019_a", "ThomasAM_2019_b", "YachidaS_2019", "GuptaA_2019", "WirbelJ_2019", "HanniganGD_2017", "VogtmannE_2016", "FengQ_2015", "YuJ_2015", "ZellerG_2014"))
 effect_sizes$variable <- revalue(effect_sizes$variable, replace = c("RandomEffects" = "Random Effects"))
 
-p1 <- ggplot(effect_sizes, aes(Species, value, shape = variable, ymin=CI_Low, ymax=CI_UP)) + 
-  geom_point(size = 2.5) +
-  geom_linerange() + 
-  scale_shape_manual(values= rev(c(3,4,8,0, 13, 11, 12, 2,5,19))) +
+effect_sizes$Species <- gsub('&alpha;','\U03B1',effect_sizes$Species)
+effect_sizes$Species <- gsub('&beta;','\U03B2',effect_sizes$Species)
+effect_sizes$variable <- forcats::fct_relevel(effect_sizes$variable, c(levels(effect_sizes$variable)[1], sort(levels(effect_sizes$variable)[-1])))
+# p1 <- ggplot(effect_sizes, aes(Species, value, shape = variable, ymin=CI_Low, ymax=CI_UP)) + 
+#   geom_point(size = 2.5) +
+#   geom_linerange() + 
+#   scale_shape_manual(values= rev(c(3,4,8,0, 13, 11, 12, 2,5,19))) +
+#   coord_flip() +
+#   theme_minimal() +
+#   geom_hline(aes(yintercept = 0), color = "gray", linetype = "dashed") +
+#   theme(axis.text.y = element_text(size = 8), 
+#         axis.title.y = element_blank(), 
+#         # axis.title.x = element_text(size = 12), 
+#         # axis.text.x = element_text(size = 12), 
+#         legend.title = element_blank(),  
+#         legend.key.size = unit(0.7, "cm"),
+#         legend.position=c(0.1,0.75), 
+#         legend.text = element_text(size = 7.5),
+#         axis.text = element_text(family = "sans-serif", size = 10, colour = "black"),
+#         strip.text = element_text(family = "sans-serif", size = 12, colour = "black")
+#         ) +
+#   ylab("Effect size") 
+p1 <- ggplot(effect_sizes) + 
+  geom_point(size = 3.5, aes(Species, value, shape = variable, color= variable)) +
+  geom_linerange(aes(Species, value,ymin=CI_Low, ymax=CI_UP)) + 
+  scale_shape_manual(name = 'Dataset', values= c(19, 8, 11, 5, 2, 0, 13, 12, 4, 3)) + 
+  scale_color_manual(name = 'Dataset', values = c('black', MTA_palette)) +
   coord_flip() +
   theme_minimal() +
   geom_hline(aes(yintercept = 0), color = "gray", linetype = "dashed") +
-  theme(axis.text.y = element_text(face = "italic", size = 8), axis.title.y = element_blank(), axis.title.x = element_text(size = 12), axis.text.x = element_text(size = 12), legend.title = element_blank(),  
-        legend.key.size = unit(0.7, "cm"), legend.position=c(0.1,0.75), legend.text = element_text(size = 7.5)) + 
+  theme(axis.title.y = element_blank(), 
+        axis.title.x = element_text(family = "sans-serif", size = 8, colour = "black"),
+        axis.text = element_text(family = "sans-serif", size = 8, colour = "black"),
+        strip.text = element_text(family = "sans-serif", size = 12, colour = "black")
+  ) +
+  guides(shape = FALSE, color = FALSE)+
   ylab("Effect size") 
-ggsave("figures/meta_analysis_pathways_top20.svg", p1, width = 10, height = 8, device = "svg")
+ggsave("figures/meta_analysis_pathways_top20.svg", p1, width = 9, height = 4, device = "svg")
 
 ## ----------------- HumaNn3 ECs meta analysis ----------------------------------------------------------------------------------------------------------------------------------------
 metadata <- read_tsv("tables/CRC_analysis_metadata_final_version.tsv", col_names = T) %>% 
@@ -703,15 +730,32 @@ effect_sizes$variable <- revalue(effect_sizes$variable, replace = c("WirbelJ_201
 effect_sizes$variable <- factor(effect_sizes$variable, levels = c("RandomEffects", "ThomasAM_2019_a", "ThomasAM_2019_b", "YachidaS_2019", "GuptaA_2019", "WirbelJ_2019", "HanniganGD_2017", "VogtmannE_2016", "FengQ_2015", "YuJ_2015", "ZellerG_2014"))
 effect_sizes$variable <- revalue(effect_sizes$variable, replace = c("RandomEffects" = "Random Effects"))
 
-p1 <- ggplot(effect_sizes, aes(Description, value, shape = variable, ymin=CI_Low, ymax=CI_UP)) + 
-  geom_point(size = 2.5) +
-  geom_linerange() + 
-  scale_shape_manual(values= rev(c(3,4,8,0, 13, 11, 12, 2,5,19))) +
+# p1 <- ggplot(effect_sizes, aes(Description, value, shape = variable, ymin=CI_Low, ymax=CI_UP)) + 
+#   geom_point(size = 2.5) +
+#   geom_linerange() + 
+#   scale_shape_manual(values= rev(c(3,4,8,0, 13, 11, 12, 2,5,19))) +
+#   coord_flip() +
+#   theme_minimal() +
+#   geom_hline(aes(yintercept = 0), color = "gray", linetype = "dashed") +
+#   theme(axis.text.y = element_text(face = "italic", size = 8), axis.title.y = element_blank(), axis.title.x = element_text(size = 12), axis.text.x = element_text(size = 12), legend.title = element_blank(),  
+#         legend.key.size = unit(0.7, "cm"), legend.position=c(0.1,0.75), legend.text = element_text(size = 7.5)) + 
+#   ylab("Effect size") 
+
+effect_sizes$variable <- forcats::fct_relevel(effect_sizes$variable, c(levels(effect_sizes$variable)[1], sort(levels(effect_sizes$variable)[-1])))
+p1 <- ggplot(effect_sizes) + 
+  geom_point(size = 3.5, aes(Description, value, shape = variable, color= variable)) +
+  geom_linerange(aes(Description, value,ymin=CI_Low, ymax=CI_UP)) + 
+  scale_shape_manual(name = 'Dataset', values= c(19, 8, 11, 5, 2, 0, 13, 12, 4, 3)) + 
+  scale_color_manual(name = 'Dataset', values = c('black', MTA_palette)) +
   coord_flip() +
   theme_minimal() +
   geom_hline(aes(yintercept = 0), color = "gray", linetype = "dashed") +
-  theme(axis.text.y = element_text(face = "italic", size = 8), axis.title.y = element_blank(), axis.title.x = element_text(size = 12), axis.text.x = element_text(size = 12), legend.title = element_blank(),  
-        legend.key.size = unit(0.7, "cm"), legend.position=c(0.1,0.75), legend.text = element_text(size = 7.5)) + 
+  theme(axis.title.y = element_blank(), 
+        axis.title.x = element_text(family = "sans-serif", size = 8, colour = "black"),
+        axis.text = element_text(family = "sans-serif", size = 8, colour = "black"),
+        strip.text = element_text(family = "sans-serif", size = 12, colour = "black")
+  ) +
+  # guides(shape = FALSE, color = FALSE)+
   ylab("Effect size") 
 ggsave("figures/meta_analysis_ecs_top20.svg", p1, width = 10, height = 8, device = "svg")
 
