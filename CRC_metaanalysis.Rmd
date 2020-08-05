@@ -42,7 +42,7 @@ metadata <- read_tsv("tables/CRC_analysis_metadata_final_version.tsv") %>%
                    gender = factor(gender),
                    country = factor(country))
 metadata$dataset_name <- gsub("ThomasAM_2019_c", "YachidaS_2019", metadata$dataset_name)
-
+metadata$dataset_name = as.factor(metadata$dataset_name)
 # mpa_samples <- lapply(levels(metadata$dataset_name), function(dataset) {
 #   dataset_mpa_path <- file.path('/shares/CIBIO-Storage/CM/scratch/data/meta', dataset, 'metaphlan-3.0_v30_CHOCOPhlAn_201901')
 #   lapply(list.files(dataset_mpa_path), function(sample) {
@@ -70,6 +70,28 @@ mpa_table <- read_tsv('tables/CRC_mpa3_statq01.tsv') %>%
 
 colnames(mpa_table) <- gsub('_profile','', colnames(mpa_table))
 mpa_table %<>% select(ID, metadata$sampleID)
+
+mpa2_samples <- lapply(levels(metadata$dataset_name), function(dataset) {
+  dataset_mpa_path <- file.path('/shares/CIBIO-Storage/CM/scratch/data/meta', dataset, 'metaphlan2')
+  lapply(list.files(dataset_mpa_path), function(sample) {
+    if(sample %in% metadata$sampleID){
+      file.path(dataset_mpa_path, sample, paste0(sample,"_profile.tsv"))
+    }
+  })
+}) %>% unlist
+
+mpa2_table <- lapply(mpa2_samples, function(sample_path){
+              read_tsv(sample_path, skip = 1, col_names = c('species','relative_abundance')) %>%
+                filter(str_detect(species, 's__')) %>%
+                filter(!str_detect(species, 't__')) %>%
+                mutate(species = gsub('^.*s__','',species),
+                       relative_abundance = as.double(relative_abundance),
+                       sample = gsub('_profile.tsv','',basename(sample_path))
+                     )
+            }) %>%
+            bind_rows %>%
+            pivot_wider(names_from = 'sample', values_from = 'relative_abundance' , values_fill = list(relative_abundance = 0), values_fn = {unique})
+
 
 markers <- c(
   "Streptococcus_anginosus_group",
@@ -164,6 +186,11 @@ rarefied_mpa3_table <- read_tsv('tables/CRC_mpa3_rarefied_0.1_percentile_statq_0
   mutate(ID = gsub('^.*s__','',ID))
 colnames(rarefied_mpa3_table) <- gsub('_rarefied_0.1_percentile_profile_statq_01','',colnames(rarefied_mpa3_table))
 
+rarefied_mpa3_table_statq_02 <- read_tsv('tables/CRC_mpa3_rarefied_0.1_percentile_statq_02.tsv') %>% 
+  filter(str_detect(ID, 's__')) %>% 
+  mutate(ID = gsub('^.*s__','',ID))
+colnames(rarefied_mpa3_table_statq_02) <- gsub('_rarefied_0.1_percentile_profile','',colnames(rarefied_mpa3_table_statq_02))
+
 rarefied_mpa2_table <- read_tsv('tables/CRC_mpa2_rarefied_0.1_percentile.tsv') %>% 
                           filter(str_detect(ID, 's__')) %>% 
                           filter(!str_detect(ID, 't__')) %>% 
@@ -171,13 +198,23 @@ rarefied_mpa2_table <- read_tsv('tables/CRC_mpa2_rarefied_0.1_percentile.tsv') %
 colnames(rarefied_mpa2_table) <- gsub('_metaphlan2.7_rarefied_0.1_percentile_profile','',colnames(rarefied_mpa2_table))
 colnames(rarefied_mpa2_table) <- gsub('_profile','',colnames(rarefied_mpa2_table))
 
+rarefied_mpa2_table_statq_02 <- read_tsv('tables/CRC_mpa2_rarefied_0.1_percentile_statq_02.tsv')
+
 shared_samples <- inner_join(metadata %>% filter(sampleID %in% colnames(rarefied_mpa2_table)[-1]), metadata %>% filter(sampleID %in% colnames(rarefied_mpa3_table)[-1]))$sampleID
 
 rarefied_mpa2_table %<>% select(ID, shared_samples)
 rarefied_mpa3_table %<>% select(ID, shared_samples)
 
+shared_samples <- inner_join(metadata %>% filter(sampleID %in% colnames(rarefied_mpa2_table_statq_02)[-1]), metadata %>% filter(sampleID %in% colnames(rarefied_mpa3_table_statq_02)[-1]))$sampleID
+
+rarefied_mpa2_table_statq_02 %<>% select(species, shared_samples)
+rarefied_mpa3_table_statq_02 %<>% select(ID, shared_samples)
+
 nspecies_mpa3 <- tibble(sample = colnames(rarefied_mpa3_table[,-1]), count = colSums(rarefied_mpa3_table[,-1] > 0 ))
 nspecies_mpa2 <- tibble(sample = colnames(rarefied_mpa2_table[,-1]), count = colSums(rarefied_mpa2_table[,-1] > 0 ))
+  
+nspecies_mpa3_statq_02 <- tibble(sample = colnames(rarefied_mpa3_table_statq_02[,-1]), count = colSums(rarefied_mpa3_table_statq_02[,-1] > 0 ))
+nspecies_mpa2_statq_02 <- tibble(sample = colnames(rarefied_mpa2_table_statq_02[,-1]), count = colSums(rarefied_mpa2_table_statq_02[,-1] > 0 ))
 ```
 
 ```{r}
@@ -187,15 +224,33 @@ group_by(dataset_name) %>%
 summarize(wilcox = wilcox.test(count ~ study_condition)$p.value %>% signif(2))
 ```
 
+# Median percent increase compared to MetaPhlAn2 using stat_q 0.1
 ```{r}
-full_join(nspecies_mpa2, nspecies_mpa3, suffix = c("_mpa2","_mpa3"), by = "sample") %>%
+median_0.1 <- full_join(nspecies_mpa2, nspecies_mpa3, suffix = c("_mpa2","_mpa3"), by = "sample") %>%
   left_join(metadata, by = c("sample" = "sampleID")) %>%
   select(contains("count_"), sample, dataset_name, study_condition) %>%
   group_by(dataset_name, study_condition) %>%
   summarize(median_mpa2 = median(count_mpa2), median_mpa3 = median(count_mpa3)) %>%
   mutate(perc_inc = ((median_mpa3-median_mpa2)/median_mpa2 * 100) %>% round(1))
+median_0.1
 ```
   
+# Median percent increase compared to MetaPhlAn2 using stat_q 0.2
+```{r}
+median_0.2 <- full_join(nspecies_mpa2_statq_02, nspecies_mpa3_statq_02, suffix = c("_mpa2","_mpa3"), by = "sample") %>%
+  left_join(metadata, by = c("sample" = "sampleID")) %>%
+  select(contains("count_"), sample, dataset_name, study_condition) %>%
+  group_by(dataset_name, study_condition) %>%
+  summarize(median_mpa2 = median(count_mpa2), median_mpa3 = median(count_mpa3)) %>%
+  mutate(perc_inc = ((median_mpa3-median_mpa2)/median_mpa2 * 100) %>% round(1))
+median_0.2
+```
+
+```{r}
+write_tsv(median_0.1, 'tables/mpa3_mpa2_statq_0.1_alphadiv_median_increase.tsv')
+write_tsv(median_0.2, 'tables/mpa3_mpa2_statq_0.2_alphadiv_median_increase.tsv')
+```
+
 
 ```{r metaphlan3_alpha_diversity_statq01, fig.height=3}
 left_join(nspecies_mpa3, metadata, by = c('sample' = 'sampleID')) %>% 
@@ -222,10 +277,36 @@ mpa_table_markers <-
 
 # MDS
 ```{r calculate MDS}
-mds_res_nonorm <- cmdscale(vegdist(t(mpa_table[,-1]), method = 'bray', diag = TRUE, upper = FALSE))
+library(MMUPHin)
+mat_sp <- mpa_table[, -1] %>% 
+  as.matrix() %>% 
+  apply(2, function(x) x / sum(x))
+rownames(mat_sp) <- mpa_table$ID
+
+df_meta <- metadata %>% 
+  as.data.frame() %>% 
+  tibble::column_to_rownames("sampleID")
+
+mat_sp <- mat_sp[, rownames(df_meta)]
+
+fit_adjust_batch <- MMUPHin::adjust_batch(mat_sp,
+                                          batch = "dataset_name",
+                                          covariates = "study_condition",
+                                          data = df_meta)
+mat_sp_norm <- fit_adjust_batch$feature_abd_adj
+
+mpa_tree <- ape::read.tree('../tree_taxa_reroot.nwk')
+mpa_tree$tip.label <- gsub(".+\\|s__", "", mpa_tree$tip.label)
+
+filt_tree <- ape::keep.tip(mpa_tree, intersect(rownames(mat_sp_norm),mpa_tree$tip.label))
+filt_mpa_table <- mat_sp_norm[filt_tree$tip.label,]
+
+rbiom_weighted <- rbiom::unifrac(asinh(sqrt(filt_mpa_table)), weighted=TRUE, tree=filt_tree)
+
+mds_res_nonorm <- cmdscale(rbiom_weighted)
 ```
 
-```{r CRC_MDS_no_normalization, fig.width=8, fig.height=4.5, fig.retina=TRUE}
+```{r CRC_MDS_no_normalization, fig.width=8, fig.height=4, fig.retina=TRUE}
 mds_res_nonorm %>% 
   as.data.frame() %>% 
   rownames_to_column('sampleID') %>% 
@@ -577,7 +658,7 @@ ggplot(effect_sizes) +
 
 
 ## ML heatmap
-```{r ml_heatmap}
+```{r ml_heatmap, fig.width=7}
 ML <- tribble(~source, ~dataset, ~AUC, ~type, 
               "MetaPhlAn 3\nspecies", "ZellerG_2014", .82, "LODO",
               "MetaPhlAn 3\nspecies", "YuJ_2015", .90, "LODO",
@@ -588,6 +669,7 @@ ML <- tribble(~source, ~dataset, ~AUC, ~type,
               "MetaPhlAn 3\nspecies", "ThomasAM_2019_a", 0.76, "LODO",
               "MetaPhlAn 3\nspecies", "ThomasAM_2019_b", 0.85, "LODO",
               "MetaPhlAn 3\nspecies", "YachidaS_2019", 0.76, "LODO",
+              
               "HUMAnN 3\nE.C.", "ZellerG_2014", 0.7646, "LODO",
               "HUMAnN 3\nE.C.", "YuJ_2015", 0.7147, "LODO",
               "HUMAnN 3\nE.C.", "FengQ_2015", 0.732, "LODO",
@@ -597,6 +679,7 @@ ML <- tribble(~source, ~dataset, ~AUC, ~type,
               "HUMAnN 3\nE.C.", "ThomasAM_2019_a", 0.8813, "LODO",
               "HUMAnN 3\nE.C.", "ThomasAM_2019_b", 0.6472, "LODO",
               "HUMAnN 3\nE.C.", "YachidaS_2019", 0.6442, "LODO",
+              
               "HUMAnN 3\nGene Family","ZellerG_2014", 0.8295, "LODO",
               "HUMAnN 3\nGene Family","YuJ_2015", 0.8158, "LODO",
               "HUMAnN 3\nGene Family","FengQ_2015", 0.8386, "LODO",
@@ -606,15 +689,18 @@ ML <- tribble(~source, ~dataset, ~AUC, ~type,
               "HUMAnN 3\nGene Family","ThomasAM_2019_a", 0.8250, "LODO",
               "HUMAnN 3\nGene Family","ThomasAM_2019_b", 0.7275, "LODO",
               "HUMAnN 3\nGene Family","YachidaS_2019", 0.6871, "LODO",
+              
               "HUMAnN 3\nPathways", "ZellerG_2014",0.7655, "LODO",
               "HUMAnN 3\nPathways", "YuJ_2015",0.6815, "LODO",
               "HUMAnN 3\nPathways", "FengQ_2015",0.7207, "LODO",
               "HUMAnN 3\nPathways", "VogtmannE_2016",0.6272, "LODO",
-              "HUMAnN 3\nPathways", "WirbelJ_2018",NA, "LODO",
+              "HUMAnN 3\nPathways", "WirbelJ_2018",0.7398, "LODO",
               "HUMAnN 3\nPathways", "GuptaA_2019",0.8793, "LODO",
               "HUMAnN 3\nPathways", "ThomasAM_2019_a",0.8122, "LODO",
-              "HUMAnN 3\nPathways", "ThomasAM_2019_b",NA, "LODO",
+              "HUMAnN 3\nPathways", "ThomasAM_2019_b",0.6993, "LODO",
               "HUMAnN 3\nPathways", "YachidaS_2019",0.6089, "LODO",
+              
+              
               "MetaPhlAn 3\nspecies", "ZellerG_2014", .87, "CV",
               "MetaPhlAn 3\nspecies", "YuJ_2015", .89, "CV",
               "MetaPhlAn 3\nspecies", "FengQ_2015", .90, "CV",
@@ -624,6 +710,7 @@ ML <- tribble(~source, ~dataset, ~AUC, ~type,
               "MetaPhlAn 3\nspecies", "ThomasAM_2019_a", 0.74, "CV",
               "MetaPhlAn 3\nspecies", "ThomasAM_2019_b", 0.78, "CV",
               "MetaPhlAn 3\nspecies", "YachidaS_2019", 0.85, "CV",
+              
               "HUMAnN 3\nE.C.", "ZellerG_2014", 0.83, "CV",
               "HUMAnN 3\nE.C.", "YuJ_2015", 0.76, "CV",
               "HUMAnN 3\nE.C.", "FengQ_2015", 0.79, "CV",
@@ -633,39 +720,42 @@ ML <- tribble(~source, ~dataset, ~AUC, ~type,
               "HUMAnN 3\nE.C.", "ThomasAM_2019_a", 0.75, "CV",
               "HUMAnN 3\nE.C.", "ThomasAM_2019_b", 0.73, "CV",
               "HUMAnN 3\nE.C.", "YachidaS_2019", 0.79, "CV",
-              "HUMAnN 3\nGene Family","ZellerG_2014", 0.81, "CV",
-              "HUMAnN 3\nGene Family","YuJ_2015", 0.78, "CV",
+              
+              "HUMAnN 3\nGene Family","ZellerG_2014", 0.7949, "CV",
+              "HUMAnN 3\nGene Family","YuJ_2015", 0.81, "CV",
               "HUMAnN 3\nGene Family","FengQ_2015", 0.78, "CV",
               "HUMAnN 3\nGene Family","VogtmannE_2016", 0.63, "CV",
               "HUMAnN 3\nGene Family","WirbelJ_2018", 0.92, "CV",
-              "HUMAnN 3\nGene Family","GuptaA_2019", NA, "CV",
-              "HUMAnN 3\nGene Family","ThomasAM_2019_a", NA, "CV",
+              "HUMAnN 3\nGene Family","GuptaA_2019", 0.9522, "CV",
+              "HUMAnN 3\nGene Family","ThomasAM_2019_a", .6908, "CV",
               "HUMAnN 3\nGene Family","ThomasAM_2019_b", 0.71, "CV",
-              "HUMAnN 3\nGene Family","YachidaS_2019", NA, "CV",
-              "HUMAnN 3\nPathways", "ZellerG_2014",0.81, "CV",
-              "HUMAnN 3\nPathways", "YuJ_2015",0.67, "CV",
-              "HUMAnN 3\nPathways", "FengQ_2015",0.72, "CV",
-              "HUMAnN 3\nPathways", "VogtmannE_2016",0.63, "CV",
-              "HUMAnN 3\nPathways", "WirbelJ_2018",NA, "CV",
-              "HUMAnN 3\nPathways", "GuptaA_2019",0.95, "CV",
-              "HUMAnN 3\nPathways", "ThomasAM_2019_a",0.76, "CV",
-              "HUMAnN 3\nPathways", "ThomasAM_2019_b",NA, "CV",
-              "HUMAnN 3\nPathways", "YachidaS_2019",0.61, "CV",
+              "HUMAnN 3\nGene Family","YachidaS_2019", 0.8234, "CV",
+              
+              "HUMAnN 3\nPathways", "ZellerG_2014",0.8121, "CV",
+              "HUMAnN 3\nPathways", "YuJ_2015",0.6698, "CV",
+              "HUMAnN 3\nPathways", "FengQ_2015",0.7106, "CV",
+              "HUMAnN 3\nPathways", "VogtmannE_2016",0.6259, "CV",
+              "HUMAnN 3\nPathways", "WirbelJ_2018",0.7569, "CV",
+              "HUMAnN 3\nPathways", "GuptaA_2019",0.9406, "CV",
+              "HUMAnN 3\nPathways", "ThomasAM_2019_a",0.7583, "CV",
+              "HUMAnN 3\nPathways", "ThomasAM_2019_b",0.7147, "CV",
+              "HUMAnN 3\nPathways", "YachidaS_2019",0.7554, "CV",
 
     )
+ML$dataset <- factor(ML$dataset)
 ML %>% 
-ggplot() + 
-  geom_tile(aes(x = type, y=dataset, fill=AUC), width=0.8) + 
-  geom_text(aes(x = type, y=dataset, label=signif(AUC,2), color= AUC < 0.73), size=4, fontface = 'bold') +
+ggplot(aes(y = type, x=dataset)) + 
+  geom_tile(aes(fill=AUC)) + 
+  geom_text(aes(label=signif(AUC,2), color= AUC < 0.73), size=3.7 ) +
   theme_cm(panel.grid.major.y = element_blank(),
-           strip.text = element_text(angle= 60),
+           strip.text.y.right = element_text(family = "sans-serif", size = 12, colour = "black", angle = 0),
            legend.text = element_text(size = 10),
-           legend.title = element_text(size = 10)
+           axis.text.x = element_text(size = 12, angle = 45, vjust = 1, hjust = 1),
+           legend.title = element_text(size = 10),
+           panel.spacing.x = unit(0.1,'lines')
          ) +
-  colormap::scale_fill_colormap(colormap = 'hot', limits = c(0.5, 1)) +
+  scale_fill_gradientn(values = c(0, 0.3, 0.6, 1), colors = c('#000000', '#E60000', '#FFD200', '#FFFFFF'), limits = c(0.5, 1))+
   scale_color_manual(guide = FALSE, values = c("black", "white"))+
-  facet_grid(~ source, ) +
-  xlab('') + ylab('Dataset')
+  facet_grid(fct_rev(source) ~ ., space = 'free') +
+  xlab('') + ylab('')
 ```
-
-

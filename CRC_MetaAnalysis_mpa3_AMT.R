@@ -29,6 +29,7 @@ effect_size_calc <- function(vector1, vector2) {
   return(effect_size)
   
 }
+MTA_palette <- c("#0039A6","#fc9665","#6CBE45","#996633","#FCCC0A","#000000","#ff1919","#00933C","#B933AD")
 
 ### --- Species abundance meta analysis mpa3 stat_q 0.1 ------------------------------------------------------------------------------
 metadata <- read_tsv("tables/CRC_analysis_metadata_final_version.tsv", col_names = T) %>% 
@@ -180,17 +181,35 @@ effect_sizes$variable <- revalue(effect_sizes$variable, replace = c("WirbelJ_201
 effect_sizes$variable <- factor(effect_sizes$variable, levels = c("RandomEffects", "ThomasAM_2019_a", "ThomasAM_2019_b", "YachidaS_2019", "GuptaA_2019", "WirbelJ_2019", "HanniganGD_2017", "VogtmannE_2016", "FengQ_2015", "YuJ_2015", "ZellerG_2014"))
 effect_sizes$variable <- revalue(effect_sizes$variable, replace = c("RandomEffects" = "Random Effects"))
 
-p1 <- ggplot(effect_sizes, aes(Species, value, shape = variable, ymin=CI_Low, ymax=CI_UP)) + 
-  geom_point(size = 2.5) +
-  geom_linerange() + 
-  scale_shape_manual(values= rev(c(3,4,8,0, 13, 11, 12, 2,5,19))) +
+# p1 <- ggplot(effect_sizes, aes(Species, value, shape = variable, ymin=CI_Low, ymax=CI_UP)) + 
+#   geom_point(size = 2.5) +
+#   geom_linerange() + 
+#   scale_shape_manual(values= rev(c(3,4,8,0, 13, 11, 12, 2,5,19))) +
+#   coord_flip() +
+#   theme_minimal() +
+#   geom_hline(aes(yintercept = 0), color = "gray", linetype = "dashed") +
+#   theme(axis.text.y = element_text(face = "italic", size = 8), axis.title.y = element_blank(), axis.title.x = element_text(size = 12), axis.text.x = element_text(size = 12), legend.title = element_blank(),  
+#         legend.key.size = unit(0.7, "cm"), legend.position=c(0.1,0.75), legend.text = element_text(size = 7.5)) + 
+#   ylab("Effect size") 
+p1 <- ggplot(effect_sizes, aes(Species, value)) + 
+  geom_point(size = 2.5, aes(shape=variable, color=variable)) +
+  geom_linerange(aes(ymin=CI_Low, ymax=CI_UP)) + 
+  scale_shape_manual(name = 'Dataset', values= c(19, 8, 11, 5, 2, 0, 13, 12, 4, 3)) + 
+  scale_color_manual(name = 'Dataset', values = c('black', MTA_palette)) +
   coord_flip() +
   theme_minimal() +
   geom_hline(aes(yintercept = 0), color = "gray", linetype = "dashed") +
-  theme(axis.text.y = element_text(face = "italic", size = 8), axis.title.y = element_blank(), axis.title.x = element_text(size = 12), axis.text.x = element_text(size = 12), legend.title = element_blank(),  
-        legend.key.size = unit(0.7, "cm"), legend.position=c(0.1,0.75), legend.text = element_text(size = 7.5)) + 
+  theme(axis.title.y = element_blank(), 
+        axis.title.x = element_text(family = "sans-serif", size = 8, colour = "black"),
+        axis.text = element_text(family = "sans-serif", size = 8, colour = "black"),
+        axis.text.y = element_text(face = "italic", size = 8), 
+        # legend.position=c(0.87,0.35), 
+        legend.text = element_text(size = 7.5),
+        strip.text = element_text(family = "sans-serif", size = 12, colour = "black")
+  ) +
+  # guides(shape = FALSE, color = FALSE)+
   ylab("Effect size") 
-ggsave("figures/meta_analysis_mpa3_statq01_top20.svg", p1, width = 10, height = 8, device = "svg")
+ggsave("figures/meta_analysis_mpa3_statq01_top20.svg", p1, width = 9, height = 6, device = "svg")
 
 ## ----------------- Species richness mpa3 rarefied stat_q 0.2 ----------------------------------------------------------------------------------------------------------------------------------------
 metadata <- read_tsv("tables/CRC_analysis_metadata_final_version.tsv", col_names = T) %>% 
@@ -574,9 +593,9 @@ effect_sizes$variable <- forcats::fct_relevel(effect_sizes$variable, c(levels(ef
 #         strip.text = element_text(family = "sans-serif", size = 12, colour = "black")
 #         ) +
 #   ylab("Effect size") 
-p1 <- ggplot(effect_sizes) + 
-  geom_point(size = 3.5, aes(Species, value, shape = variable, color= variable)) +
-  geom_linerange(aes(Species, value,ymin=CI_Low, ymax=CI_UP)) + 
+p1 <- ggplot(effect_sizes, aes(Species, value)) + 
+  geom_point(size = 3.5, aes(shape = variable, color= variable)) +
+  geom_linerange(aes(ymin=CI_Low, ymax=CI_UP)) + 
   scale_shape_manual(name = 'Dataset', values= c(19, 8, 11, 5, 2, 0, 13, 12, 4, 3)) + 
   scale_color_manual(name = 'Dataset', values = c('black', MTA_palette)) +
   coord_flip() +
@@ -585,11 +604,13 @@ p1 <- ggplot(effect_sizes) +
   theme(axis.title.y = element_blank(), 
         axis.title.x = element_text(family = "sans-serif", size = 8, colour = "black"),
         axis.text = element_text(family = "sans-serif", size = 8, colour = "black"),
+        legend.position=c(0.25,0.3),
         strip.text = element_text(family = "sans-serif", size = 12, colour = "black")
   ) +
-  guides(shape = FALSE, color = FALSE)+
+  # guides(shape = FALSE, color = FALSE)+
   ylab("Effect size") 
-ggsave("figures/meta_analysis_pathways_top20.svg", p1, width = 9, height = 4, device = "svg")
+p1
+ggsave("figures/meta_analysis_pathways_top20.svg", p1, width = 9, height = 5, device = "svg")
 
 ## ----------------- HumaNn3 ECs meta analysis ----------------------------------------------------------------------------------------------------------------------------------------
 metadata <- read_tsv("tables/CRC_analysis_metadata_final_version.tsv", col_names = T) %>% 
