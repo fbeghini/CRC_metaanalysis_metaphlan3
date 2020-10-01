@@ -638,6 +638,17 @@ NR90_cutC %>%
   xlab('Dataset name')
 ```
 
+## Distribution of yeaW CPM per dataset
+```{r NR90_yeaW_CPM, fig.height=3, fig.width=6}
+NR90_yeaW %>%
+  full_join(metadata, by = c('sample' = 'sampleID')) %>%
+  ggplot(aes(dataset_name,log(1+CPM))) +
+  stat_boxplot(aes(fill=study_condition)) + 
+  theme_cm(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1.05), axis.line = element_line()) + 
+  scale_fill_manual(values = c('#758862', '#AC5248'), name = 'Condition') + 
+  xlab('Dataset name')
+```
+
 ```{r eval=FALSE, fig.height=4, fig.width=9, include=FALSE}
 ggplot(effect_sizes) + 
   geom_point(size = 3.5, aes(Species, value, shape = variable, color= variable)) +
