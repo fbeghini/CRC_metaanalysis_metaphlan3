@@ -893,3 +893,117 @@ forest(m.hksj.raw, sortvar = m.hksj.raw$TE, lab.e = "CRC", comb.random = T, text
 forest(res1, slab=dat1$Dataset, col = "dark blue", annotate = T, order = order(res1$yi))
 text(-2.45, -1.6, pos=4, "P-value <.0001")
 text(-0.5, 10.5, pos=4, "HUMAnN v3 cutC UniRef90")
+
+
+## ----------------- HumaNn3 gene families meta analysis ----------------------------------------------------------------------------------------------------------------------------------------
+metadata <- read_tsv("tables/CRC_analysis_metadata_final_version.tsv", col_names = T) %>% 
+  as.data.frame(row.names = FALSE, stringsAsFactors=FALSE)
+metadata$study_condition <- gsub("CRC", "carcinoma", metadata$study_condition)
+rownames(metadata)[metadata$dataset_name == "FengQ_2015"] <- as.character(metadata$sampleID[metadata$dataset_name == "FengQ_2015"])
+rownames(metadata)[metadata$dataset_name == "ThomasAM_2019_c"] <- as.character(metadata$sampleID[metadata$dataset_name == "ThomasAM_2019_c"])
+rownames(metadata)[metadata$dataset_name == "ZellerG_2014"] <- as.character(metadata$sampleID[metadata$dataset_name == "ZellerG_2014"])
+rownames(metadata)[metadata$dataset_name == "YachidaS_2019"] <- as.character(metadata$sampleID[metadata$dataset_name == "YachidaS_2019"])
+rownames(metadata)[metadata$dataset_name == "YuJ_2015"] <- as.character(metadata$sampleID[metadata$dataset_name == "YuJ_2015"])
+rownames(metadata)[metadata$dataset_name == "ThomasAM_2019_a"] <- as.character(metadata$subjectID[metadata$dataset_name == "ThomasAM_2019_a"])
+rownames(metadata)[metadata$dataset_name == "ThomasAM_2019_b"] <- as.character(metadata$subjectID[metadata$dataset_name == "ThomasAM_2019_b"])
+rownames(metadata)[metadata$dataset_name == "VogtmannE_2016"] <- as.character(metadata$subjectID[metadata$dataset_name == "VogtmannE_2016"])
+rownames(metadata)[metadata$dataset_name == "WirbelJ_2018"] <- as.character(metadata$subjectID[metadata$dataset_name == "WirbelJ_2018"])
+rownames(metadata)[metadata$dataset_name == "GuptaA_2019"] <- as.character(metadata$sampleID[metadata$dataset_name == "GuptaA_2019"])
+
+
+hnn_normalizedgenefamilies <- lapply(unique(metadata$dataset_name), function(dataset) {
+  dataset_hnn_path <- file.path('/shares/CIBIO-Storage/CM/scratch/data/meta', dataset, 'humann-3.0_v30_CHOCOPhlAn_201901')
+  if(dataset == 'ThomasAM_2019_c') { dataset_hnn_path <- file.path('/shares/CIBIO-Storage/CM/cmstore/data/meta', dataset, 'humann-3.0_v30_CHOCOPhlAn_201901')}
+  lapply(list.files(dataset_hnn_path), function(sample) {
+    if(sample %in% metadata$sampleID){
+      path=file.path(dataset_hnn_path, sample, paste0(sample,"_genefamilies-cpm.tsv"))
+      if(file.exists(path))
+        path
+    }
+  })
+}) %>% unlist
+
+hnn_genefamilies <- data.table::rbindlist(parallel::mclapply(hnn_normalizedgenefamilies, function(sample_path) {
+                            data.table::fread(cmd = paste0('grep -v "|" ', sample_path), nThread = 5, col.names = c('GeneFamily','relative_abundance')) %>%
+                              cbind(sample = gsub("_genefamilies-cpm.tsv","",basename(sample_path)))
+                  }, mc.cores = 30))
+gf_counts <- hnn_genefamilies[,.N, by=GeneFamily]
+tokeep <- gf_counts[gf_counts[,N>=nrow(metadata)*0.1],]
+hnn_genefamilies <- hnn_genefamilies[hnn_genefamilies$GeneFamily %in% tokeep$GeneFamily,]
+hnn_genefamilies <- data.table::dcast(hnn_genefamilies, GeneFamily ~ sample, value.var = "relative_abundance", fill = 0)
+
+
+# genefamilies <- data.table::fread("tables/humann3_genefamilies_CRC_cohorts_cpm_unstratified.tsv",  nThread=32, nrows=)
+genefamilies <- as.data.frame(hnn_genefamilies)
+rownames(genefamilies) <- genefamilies[,1]
+genefamilies <- genefamilies[,-1]
+colnames(genefamilies) <- gsub("_Abundance", "", colnames(genefamilies))
+colnames(genefamilies)[grep("LILT", colnames(genefamilies))] <- unlist(lapply( colnames(genefamilies)[grep("LILT", colnames(genefamilies))], function(x) unlist(strsplit(x, split = "_"))[[2]]))
+colnames(genefamilies)[grep("CRC_MR", colnames(genefamilies))] <- unlist(lapply( colnames(genefamilies)[grep("CRC_MR", colnames(genefamilies))], function(x) unlist(strsplit(x, split = "_"))[[3]]))
+common.ids <- intersect(colnames(genefamilies), rownames(metadata))
+
+# genefamilies <- as.data.frame(genefamilies)
+# genefamilies_2 <- apply(genefamilies, 2, as.numeric)
+# rownames(genefamilies_2) <- rownames(genefamilies)
+# genefamilies <- genefamilies_2
+genefamilies <- apply(genefamilies, 2, function(x) asin(sqrt(x/sum(x))))
+genefamilies <- genefamilies[,common.ids]
+genefamilies <- as.data.frame(genefamilies)
+metadata <- metadata[common.ids,]
+
+library(parallel)
+library(doParallel)
+library(foreach)
+n <- 50000
+nr <- nrow(genefamilies)
+x <- split(genefamilies, rep(1:ceiling(nr/n), each=n, length.out=nr))
+cl <- makeCluster(17)
+doParallel::registerDoParallel(cl)
+results <- foreach(z=1:length(x), .combine = rbind, .packages = 'metafor', .verbose = TRUE) %dopar% {
+  meta_analysis_results <- matrix(NA, ncol = 9, nrow=nrow(x[[z]]))
+  colnames(meta_analysis_results) <- c("Species", "Number_Samples", "I^2", "P-value Fit", "Pvalue", "Standard Error", "Coefficient", "Confidence Interval Lower Limit", "Confidence Interval Upper Limit")
+  meta_analysis_results <- as.data.frame(meta_analysis_results)
+  for (k in 1:nrow(x[[z]])) {
+    species <- x[[z]][k,]
+    species_table <- matrix(NA, ncol = 8, nrow = 10)
+    colnames(species_table) <- c("Study", "Dataset", "SampleSize_Cancer", "Mean_Cancer", "SD_Cancer", "SampleSize_Control", "Mean_Control", "SD_Control")
+    species_table <- as.data.frame(species_table)
+    datasets <- as.character(unique(metadata$dataset_name))
+    for (i in 1:length(datasets)) {
+      dataset <- datasets[i]
+      species_table$Study[i] <- i
+      species_table$Dataset[i] <- dataset
+      species_table$SampleSize_Cancer[i] <- length(which(metadata$study_condition == "carcinoma" & metadata$dataset_name == dataset))
+      species_table$Mean_Cancer[i] <- mean(as.numeric(species[,which(metadata$study_condition == "carcinoma" & metadata$dataset_name == dataset)]))
+      species_table$SD_Cancer[i] <- sd(as.numeric(species[,which(metadata$study_condition == "carcinoma" & metadata$dataset_name == dataset)]))
+      species_table$SampleSize_Control[i] <- length(which(metadata$study_condition == "control" & metadata$dataset_name == dataset))
+      species_table$Mean_Control[i] <- mean(as.numeric(species[,which(metadata$study_condition == "control" & metadata$dataset_name == dataset)]))
+      species_table$SD_Control[i] <- sd(as.numeric(species[,which(metadata$study_condition == "control" & metadata$dataset_name == dataset)]))
+    }
+    dat1 <- escalc(measure="SMD", m1i=Mean_Cancer, sd1i=SD_Cancer, n1i=SampleSize_Cancer,
+                   m2i=Mean_Control, sd2i=SD_Control, n2i=SampleSize_Control, data=species_table, vtype="UB")
+    
+    if ( length(which(dat1$Mean_Cancer > 0)) < 5 | length(which(dat1$Mean_Control > 0)) < 5 ) {
+      meta_analysis_results$Species[k] <- rownames(x[[z]])[k]
+      meta_analysis_results$Number_Samples[k] <- 0  
+      next()
+    } else{
+      res1 <- rma(yi, vi, data=dat1,control=list(stepadj=0.5, maxiter = 10000), verbose=TRUE, digits=5)
+      meta_analysis_results$Species[k] <- rownames(x[[z]])[k]
+      meta_analysis_results$Number_Samples[k] <- sum(res1$ni)
+      meta_analysis_results$`I^2`[k] <- res1$I2
+      meta_analysis_results$`P-value Fit`[k] <- res1$QEp
+      meta_analysis_results$Pvalue[k] <- res1$pval
+      meta_analysis_results$`Standard Error`[k] <- res1$b
+      meta_analysis_results$Coefficient[k] <- res1$b
+      meta_analysis_results$`Confidence Interval Lower Limit`[k] <- res1$ci.lb
+      meta_analysis_results$`Confidence Interval Upper Limit`[k] <- res1$ci.ub
+    }
+  }
+  return(meta_analysis_results)
+}
+stopCluster(cl)
+results <- results[!(is.na(results$`I^2`)),]
+results$PvalueAdjusted <- p.adjust(results$Pvalue, method = "BH")
+results <- results[order(results$PvalueAdjusted), ]
+write.table(results, "results/meta_analysis_results_humann3_genefamilies_arcsine_all_datasets2.txt", col.names = T, row.names = F, sep = "\t", quote = F)

@@ -74,7 +74,7 @@ mpa_table %<>% select(ID, metadata$sampleID)
 mpa2_samples <- lapply(levels(metadata$dataset_name), function(dataset) {
   dataset_mpa_path <- file.path('/shares/CIBIO-Storage/CM/scratch/data/meta', dataset, 'metaphlan2')
   lapply(list.files(dataset_mpa_path), function(sample) {
-    if(sample %in% metadata$sampleID){
+    if(sample %in% metadata$sampleID){7
       file.path(dataset_mpa_path, sample, paste0(sample,"_profile.tsv"))
     }
   })
@@ -303,21 +303,46 @@ filt_mpa_table <- mat_sp_norm[filt_tree$tip.label,]
 
 rbiom_weighted <- rbiom::unifrac(asinh(sqrt(filt_mpa_table)), weighted=TRUE, tree=filt_tree)
 
-mds_res_nonorm <- cmdscale(rbiom_weighted)
+mds_res_nonorm <- cmdscale(rbiom_weighted, k=2)
 ```
 
-```{r CRC_MDS_no_normalization, fig.width=8, fig.height=4, fig.retina=TRUE}
+```{r CRC_MDS_no_normalization, fig.height=4, fig.retina=TRUE, fig.width=8, message=FALSE, warning=FALSE}
+set.seed(1993)
 mds_res_nonorm %>% 
   as.data.frame() %>% 
   rownames_to_column('sampleID') %>% 
   left_join(metadata, by = 'sampleID') %>% 
   select(sampleID, MDS1=V1, MDS2=V2, study_condition, dataset_name) %>% 
-ggplot() +
-  geom_point(aes(MDS1,MDS2, shape=study_condition, color=dataset_name), size=1.5) +
+  mutate(ord=as.character(runif(nrow(mds_res_nonorm)))) %>% 
+  arrange(ord) -> df_mds
+
+ggplot(df_mds, aes(MDS1,MDS2, shape=study_condition, color=ord)) +
+  # geom_point(data = (. %>% filter(dataset_name == 'YachidaS_2019') ), aes(MDS1,MDS2, shape=study_condition, color=dataset_name), size=1.5)+
+  # geom_point(data = (. %>% filter(dataset_name != 'YachidaS_2019') ), aes(MDS1,MDS2, shape=study_condition, color=dataset_name), size=1.5) +
+  geom_point(size=1.5, show.legend = FALSE) +
+  # scale_color_manual(values = MTA_palette, name = 'Dataset') +
+  theme_minimal(base_size = 15) +
+  scale_shape_discrete(name = 'Condition')
+
+
+ggplot(data=df_mds) +
+   purrr::map(.x = split(df_mds, f = df_mds$ord),  
+              .f = function(d){
+     geom_point(data=d,aes(x=MDS1, y=MDS2, shape=study_condition, color=dataset_name), size=1.5)
+   }) +
   scale_color_manual(values = MTA_palette, name = 'Dataset') +
-  theme_minimal(base_size = 15) + 
+  theme_minimal(base_size = 15) +
   scale_shape_discrete(name = 'Condition')
 ```
+
+```{r PERMANOVA_wunifrac}
+lapply(levels(metadata$dataset_name), function (d){
+  subset_metadata <- metadata %>% mutate(comp = ifelse(dataset_name == d, 'd','all'))
+  c(d, adonis(rbiom_weighted~comp, data=subset_metadata)$aov.tab[1,6])
+}) -> a
+do.call(rbind, a)
+```
+
 
 # Heatmap: Abundance of CRC Biomarkers
 ```{r}
